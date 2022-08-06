@@ -14,7 +14,7 @@ namespace rdmapp {
 
 device::device(uint16_t device_num, uint16_t port_num) : device_(nullptr) {
   int32_t nr_devices = 0;
-  struct ::ibv_device **ibv_device_list = ibv_get_device_list(&nr_devices);
+  struct ibv_device **ibv_device_list = ::ibv_get_device_list(&nr_devices);
   if (nr_devices == 0) {
     throw std::runtime_error("no Infiniband devices found");
   }
@@ -39,7 +39,7 @@ device::device(uint16_t device_num, uint16_t port_num) : device_(nullptr) {
   } else if (port_attr_.link_layer == IBV_LINK_LAYER_INFINIBAND) {
     link_layer = "infiniband";
   }
-  RDMAPP_LOG_DEBUG("opened Inifiband device lid=%d link_layer=%s",
+  RDMAPP_LOG_DEBUG("opened Infiniband device lid=%d link_layer=%s",
                    port_attr_.lid, link_layer);
 }
 
