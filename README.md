@@ -56,8 +56,10 @@ Browse [`examples`](/examples) to learn more about this library.
 Requires: C++ compiler with C++20 standard support and `libibverbs` development headers installed.
 
 ```bash
-git clone https://github.com/howardlau1999/rdmapp
-cd rmdapp && mkdir build
-cd build && cmake ..
-make -j$(nproc)
+git clone https://github.com/howardlau1999/rdmapp && cd rdmapp
+cmake -Bbuild -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR .
+cmake --build build
+
+# To install
+cmake --install build
 ```

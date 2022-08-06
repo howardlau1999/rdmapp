@@ -36,3 +36,6 @@ if (RDMAPP_BUILD_EXAMPLES)
   target_link_libraries(helloworld rdmapp)
 endif()
 
+include(GNUInstallDirs)
+install(TARGETS rdmapp EXPORT rdmapp ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/rdmapp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
