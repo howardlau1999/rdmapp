@@ -26,7 +26,7 @@ rdmapp::task<void> server(std::shared_ptr<rdmapp::qp> qp) {
   std::cout << "Received from client: " << buffer << std::endl;
 }
 
-rdmapp::acceptor acceptor(pd, cq, std::stoi(argv[1]));
+rdmapp::acceptor acceptor(pd, cq, 2333);
 auto qp = acceptor.accept();
 auto coro = server(qp);
 while (!coro.h_.done());
@@ -44,7 +44,7 @@ rdmapp::task<void> client(std::shared_ptr<rdmapp::qp> qp) {
   std::cout << "Sent to server: " << buffer << std::endl;
 }
 
-auto qp = std::make_shared<rdmapp::qp>(argv[1], std::stoi(argv[2]), pd, cq);
+auto qp = std::make_shared<rdmapp::qp>("127.0.0.1", 2333, pd, cq);
 auto coro = client(qp);
 while (!coro.h_.done());
 ```
