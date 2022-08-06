@@ -77,7 +77,7 @@ deserialized_qp tcp::recv_qp() {
   if (remote_qp.header.user_data_size > 0) {
     remote_qp.user_data.resize(remote_qp.header.user_data_size, 0);
     while (user_data_read < remote_qp.header.user_data_size) {
-      int n = ::recv(fd_, &buffer[header_read],
+      int n = ::recv(fd_, &buffer[user_data_read],
                      remote_qp.header.user_data_size - user_data_read, 0);
       if (n == 0) {
         throw_with("remote closed unexpectedly while receiving user data");
