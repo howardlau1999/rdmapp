@@ -17,6 +17,7 @@ option(RDMAPP_BUILD_EXAMPLES "Build examples" ON)
 
 set(RDMAPP_SOURCE_FILES
   src/detail/socket.cc
+  src/detail/event_loop.cc
   src/device.cc
   src/pd.cc
   src/cq.cc

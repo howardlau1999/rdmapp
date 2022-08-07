@@ -17,13 +17,14 @@ rdmapp::task<void> server(std::shared_ptr<rdmapp::qp> qp) {
   std::cout << "Received from client: " << buffer << std::endl;
 }
 
-rdmapp::task<void> client(std::shared_ptr<rdmapp::qp> qp) {
+rdmapp::task<int> client(std::shared_ptr<rdmapp::qp> qp) {
   char buffer[6];
   co_await qp->recv(buffer, sizeof(buffer));
   std::cout << "Received from server: " << buffer << std::endl;
   std::copy_n("world", sizeof(buffer), buffer);
   co_await qp->send(buffer, sizeof(buffer));
   std::cout << "Sent to server: " << buffer << std::endl;
+  co_return 0;
 }
 
 int main(int argc, char *argv[]) {
