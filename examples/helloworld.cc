@@ -6,15 +6,18 @@
 #include <rdmapp/rdmapp.h>
 #include <string>
 #include <thread>
+#include "rdmapp/acceptor.h"
 
 using namespace std::literals::chrono_literals;
 
-rdmapp::task<void> server(std::shared_ptr<rdmapp::qp> qp) {
+rdmapp::task<void> server(rdmapp::acceptor &acceptor_) {
+  auto qp = co_await acceptor.accept();
   char buffer[6] = "hello";
   co_await qp->send(buffer, sizeof(buffer));
   std::cout << "Sent to client: " << buffer << std::endl;
   co_await qp->recv(buffer, sizeof(buffer));
   std::cout << "Received from client: " << buffer << std::endl;
+  co_return;
 }
 
 rdmapp::task<int> client(std::shared_ptr<rdmapp::qp> qp) {
@@ -34,8 +37,7 @@ int main(int argc, char *argv[]) {
   auto cq_poller = std::make_shared<rdmapp::cq_poller>(cq);
   if (argc == 2) {
     rdmapp::acceptor acceptor(pd, cq, std::stoi(argv[1]));
-    auto qp = acceptor.accept();
-    auto coro = server(qp);
+    auto coro = server(acceptor);
     while (!coro.h_.done()) {
       std::this_thread::yield();
     }

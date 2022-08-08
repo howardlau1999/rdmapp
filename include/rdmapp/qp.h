@@ -10,6 +10,7 @@
 #include <infiniband/verbs.h>
 
 #include "rdmapp/cq.h"
+#include "rdmapp/socket/tcp_connection.h"
 #include "rdmapp/detail/noncopyable.h"
 #include "rdmapp/detail/serdes.h"
 #include "rdmapp/device.h"
@@ -111,6 +112,8 @@ public:
                       size_t length);
   recv_awaitable recv(void *buffer, size_t length);
 
+  static task<deserialized_qp> recv_qp(socket::tcp_connection &connection);
+  task<void> send_qp(socket::tcp_connection &connection);
   std::vector<uint8_t> serialize() const;
   std::vector<uint8_t> &user_data();
   ~qp();
