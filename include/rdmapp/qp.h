@@ -89,12 +89,6 @@ public:
     void await_resume();
   };
 
-  qp(std::string const &hostname, uint16_t port, std::shared_ptr<pd> pd,
-     std::shared_ptr<cq> cq, std::shared_ptr<srq> srq = nullptr);
-  qp(std::string const &hostname, uint16_t port, std::shared_ptr<pd> pd,
-     std::shared_ptr<cq> recv_cq, std::shared_ptr<cq> send_cq,
-     std::shared_ptr<srq> srq = nullptr);
-
   qp(uint16_t remote_device_id, uint32_t remote_qpn, uint32_t remote_psn,
      std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
      std::shared_ptr<srq> srq = nullptr);

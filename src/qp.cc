@@ -30,24 +30,6 @@
 namespace rdmapp {
 
 std::atomic<uint32_t> qp::next_sq_psn = 1;
-
-qp::qp(std::string const &hostname, uint16_t port,
-       std::shared_ptr<rdmapp::pd> pd, std::shared_ptr<cq> cq,
-       std::shared_ptr<srq> srq)
-    : qp(hostname, port, pd, cq, cq, srq) {}
-
-qp::qp(std::string const &hostname, uint16_t port,
-       std::shared_ptr<rdmapp::pd> pd, std::shared_ptr<cq> recv_cq,
-       std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq)
-    : qp(pd, recv_cq, send_cq, srq) {
-  detail::socket::tcp remote(hostname, port);
-  remote.send_qp(*this);
-  auto remote_qp = remote.recv_qp();
-  user_data_ = std::move(remote_qp.user_data);
-  rtr(remote_qp.header.lid, remote_qp.header.qp_num, remote_qp.header.sq_psn);
-  rts();
-}
-
 qp::qp(uint16_t remote_device_id, uint32_t remote_qpn, uint32_t remote_psn,
        std::shared_ptr<pd> pd, std::shared_ptr<cq> cq, std::shared_ptr<srq> srq)
     : qp(remote_device_id, remote_qpn, remote_psn, pd, cq, cq, srq) {}

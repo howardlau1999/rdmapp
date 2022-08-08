@@ -3,6 +3,7 @@
 #include <arpa/inet.h>
 #include <asm-generic/errno-base.h>
 #include <asm-generic/errno.h>
+#include <cassert>
 #include <cerrno>
 #include <memory>
 #include <netdb.h>
@@ -78,16 +79,18 @@ void tcp_listener::accept_awaitable::await_suspend(std::coroutine_handle<> h) {
   channel_->wait_readable();
 }
 
-int tcp_listener::accept_awaitable::await_resume() {
-  if (fd_ > 0) {
-    return fd_;
+std::shared_ptr<channel> tcp_listener::accept_awaitable::await_resume() {
+  if (fd_ < 0) {
+    fd_ = do_io();
   }
-  return do_io();
+  check_errno(fd_, "could not accept after readable");
+  auto channel_ptr = std::make_shared<channel>(fd_, channel_->loop());
+  channel_ptr->set_nonblocking();
+  return channel_ptr;
 }
 
 tcp_listener::tcp_listener(std::shared_ptr<event_loop> loop,
-                           std::string const &hostname, uint16_t port)
-    : loop_(loop) {
+                           std::string const &hostname, uint16_t port) {
   std::string port_str = std::to_string(port);
   int fd = ::socket(AF_INET, SOCK_STREAM, 0);
 
@@ -123,7 +126,7 @@ tcp_listener::tcp_listener(std::shared_ptr<event_loop> loop,
   ::freeaddrinfo(servinfo);
   check_ptr(p, "failed to bind");
   check_errno(::listen(fd, 128), "failed to listen");
-  channel_ = std::make_shared<channel>(fd, loop_);
+  channel_ = std::make_shared<channel>(fd, loop);
   channel_->set_nonblocking();
   RDMAPP_LOG_DEBUG("acceptor fd %d listening on %d", fd, port);
 }

@@ -20,6 +20,7 @@ private:
   callback_fn writable_callback_;
 
 public:
+  static void set_nonblocking(int fd);
   channel(int fd, std::shared_ptr<event_loop> loop);
   int fd();
   void set_nonblocking();
@@ -29,6 +30,7 @@ public:
   void writable_callback();
   void set_readable_callback(callback_fn &&callback);
   void set_writable_callback(callback_fn &&callback);
+  std::shared_ptr<event_loop> loop();
   ~channel();
 };
 

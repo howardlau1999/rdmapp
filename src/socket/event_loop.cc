@@ -27,6 +27,10 @@ event_loop::event_loop(size_t max_events)
               "failed to add close event fd to epoll");
 }
 
+std::shared_ptr<event_loop> event_loop::new_loop(size_t max_events) {
+  return std::make_shared<event_loop>(max_events);
+}
+
 void event_loop::register_fd(std::shared_ptr<channel> channel,
                              struct epoll_event *event) {
   assert(epoll_fd_ > 0);
@@ -73,9 +77,9 @@ void event_loop::loop() {
       assert(it != channels_.end());
       auto channel = it->second.lock();
       if (channel) {
-        if (event.events & EPOLLIN) {
+        if (event.events & EPOLLIN || event.events & EPOLLERR) {
           channel->readable_callback();
-        } else if (event.events & EPOLLOUT) {
+        } else if (event.events & EPOLLOUT || event.events & EPOLLERR) {
           channel->writable_callback();
         }
       } else {

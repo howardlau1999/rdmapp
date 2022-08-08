@@ -27,30 +27,28 @@
 namespace rdmapp {
 
 acceptor::acceptor(std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
-                   uint16_t port)
-    : acceptor(pd, cq, cq, port) {}
+                   std::shared_ptr<socket::event_loop> loop, uint16_t port)
+    : acceptor(pd, cq, cq, loop, port) {}
 
 acceptor::acceptor(std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
-                   std::shared_ptr<cq> send_cq, uint16_t port)
-    : acceptor(pd, recv_cq, send_cq, "", port) {}
+                   std::shared_ptr<cq> send_cq,
+                   std::shared_ptr<socket::event_loop> loop, uint16_t port)
+    : acceptor(pd, recv_cq, send_cq, loop, "", port) {}
 
 acceptor::acceptor(std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
+                   std::shared_ptr<socket::event_loop> loop,
                    std::string const &hostname, uint16_t port)
-    : acceptor(pd, cq, cq, hostname, port) {}
+    : acceptor(pd, cq, cq, loop, hostname, port) {}
 
 acceptor::acceptor(std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
-                   std::shared_ptr<cq> send_cq, std::string const &hostname,
-                   uint16_t port)
+                   std::shared_ptr<cq> send_cq,
+                   std::shared_ptr<socket::event_loop> loop,
+                   std::string const &hostname, uint16_t port)
     : pd_(pd), recv_cq_(recv_cq), send_cq_(send_cq),
-      loop_(std::make_shared<socket::event_loop>()),
-      listener_(loop_, hostname, port), fd_(-1) {
-  auto looper = std::thread([this]() { loop_->loop(); });
-  looper.detach();
-}
+      listener_(std::make_unique<socket::tcp_listener>(loop, hostname, port)) {}
 
 task<std::shared_ptr<qp>> acceptor::accept() {
-  auto fd = co_await listener_.accept();
-  auto channel = std::make_shared<socket::channel>(fd, loop_);
+  auto channel = co_await listener_->accept();
   auto connection = socket::tcp_connection(channel);
   auto remote_qp = co_await qp::recv_qp(connection);
   auto local_qp =
@@ -61,6 +59,6 @@ task<std::shared_ptr<qp>> acceptor::accept() {
   co_return local_qp;
 }
 
-acceptor::~acceptor() { loop_->close(); }
+acceptor::~acceptor() {}
 
 } // namespace rdmapp

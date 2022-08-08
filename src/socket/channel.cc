@@ -16,19 +16,20 @@ namespace rdmapp {
 namespace socket {
 
 channel::channel(int fd, std::shared_ptr<event_loop> loop)
-    : fd_(fd), loop_(loop) {
-}
+    : fd_(fd), loop_(loop) {}
 
 int channel::fd() { return fd_; }
 
 std::function<void()> channel::noop_callback = []() {};
 
-void channel::set_nonblocking() {
-  int opts = fcntl(fd_, F_GETFL);
+void channel::set_nonblocking(int fd) {
+  int opts = fcntl(fd, F_GETFL);
   check_errno(opts, "failed to get fcntl flags");
   opts |= O_NONBLOCK;
-  check_errno(fcntl(fd_, F_SETFL, opts), "failed to set fcntl flags");
+  check_errno(fcntl(fd, F_SETFL, opts), "failed to set fcntl flags");
 }
+
+void channel::set_nonblocking() { set_nonblocking(fd_); }
 
 void channel::writable_callback() {
   writable_callback_();
@@ -58,7 +59,12 @@ void channel::set_readable_callback(callback_fn &&callback) {
   readable_callback_ = callback;
 }
 
+std::shared_ptr<event_loop> channel::loop() {
+  return loop_;
+}
+
 channel::~channel() {
+  loop_->deregister(this->shared_from_this());
   assert(fd_ > 0);
   if (auto rc = ::close(fd_); rc != 0) {
     RDMAPP_LOG_ERROR("failed to close fd %d: %s (errno=%d)", fd_,
