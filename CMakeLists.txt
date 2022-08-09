@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.3 FATAL_ERROR)
 project(rdmapp)
 set(CMAKE_CXX_STANDARD 20)
 
@@ -37,6 +37,12 @@ set(RDMAPP_SOURCE_FILES
 
 add_library(rdmapp STATIC ${RDMAPP_SOURCE_FILES})
 target_link_libraries(rdmapp ibverbs Threads::Threads)
+
+find_program(iwyu_path NAMES include-what-you-use iwyu)
+if (iwyu_path)
+  message("-- Using include-what-you-use ${iwyu_path}")
+  set_property(TARGET rdmapp PROPERTY CXX_INCLUDE_WHAT_YOU_USE ${iwyu_path})
+endif()
 
 if (RDMAPP_BUILD_EXAMPLES)
   add_executable(helloworld examples/helloworld.cc)

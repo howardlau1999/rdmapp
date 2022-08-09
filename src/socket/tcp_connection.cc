@@ -1,7 +1,6 @@
 #include "rdmapp/socket/tcp_connection.h"
 
 #include <arpa/inet.h>
-#include <asm-generic/errno.h>
 #include <memory>
 #include <netdb.h>
 #include <netinet/in.h>
