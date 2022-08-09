@@ -1,5 +1,7 @@
 #pragma once
 
+#include "rdmapp/detail/debug.h"
+
 #include <coroutine>
 #include <exception>
 
@@ -37,7 +39,6 @@ template <> struct task_awaiter<void> {
   bool await_ready() { return false; }
   auto await_suspend(std::coroutine_handle<> suspended) {
     continuation_ = suspended;
-    return h_;
   }
   void await_resume() {}
 };
@@ -52,7 +53,6 @@ template <class T> struct task_awaiter {
   bool await_ready() { return false; }
   auto await_suspend(std::coroutine_handle<> suspended) {
     continuation_ = suspended;
-    return h_;
   }
   auto await_resume() { return value_; }
 };

@@ -48,9 +48,9 @@ std::string get_in_addr_string(struct sockaddr_storage *ss) {
 int tcp_listener::accept_awaitable::do_io() {
   struct sockaddr_storage client_addr = {};
   socklen_t client_addr_len = sizeof(client_addr);
-  int client_fd =
-      ::accept4(fd_, reinterpret_cast<struct sockaddr *>(&client_addr),
-                &client_addr_len, SOCK_CLOEXEC | SOCK_NONBLOCK);
+  int client_fd = ::accept4(channel_->fd(),
+                            reinterpret_cast<struct sockaddr *>(&client_addr),
+                            &client_addr_len, SOCK_CLOEXEC | SOCK_NONBLOCK);
   if (client_fd < 0) {
     if (errno == EAGAIN || errno == EWOULDBLOCK) {
       return client_fd;
@@ -67,24 +67,26 @@ int tcp_listener::accept_awaitable::do_io() {
 
 tcp_listener::accept_awaitable::accept_awaitable(
     std::shared_ptr<channel> channel)
-    : channel_(channel) {}
+    : channel_(channel), client_fd_(-1) {}
 
 bool tcp_listener::accept_awaitable::await_ready() {
-  fd_ = do_io();
-  return fd_ > 0;
+  client_fd_ = do_io();
+  return client_fd_ > 0;
 }
 
 void tcp_listener::accept_awaitable::await_suspend(std::coroutine_handle<> h) {
-  channel_->set_readable_callback([h]() { h.resume(); });
+  channel_->set_readable_callback([h]() {
+    h.resume();
+  });
   channel_->wait_readable();
 }
 
 std::shared_ptr<channel> tcp_listener::accept_awaitable::await_resume() {
-  if (fd_ < 0) {
-    fd_ = do_io();
+  if (client_fd_ < 0) {
+    client_fd_ = do_io();
   }
-  check_errno(fd_, "could not accept after readable");
-  auto channel_ptr = std::make_shared<channel>(fd_, channel_->loop());
+  check_errno(client_fd_, "could not accept after readable");
+  auto channel_ptr = std::make_shared<channel>(client_fd_, channel_->loop());
   channel_ptr->set_nonblocking();
   return channel_ptr;
 }

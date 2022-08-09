@@ -1,8 +1,11 @@
 #include "rdmapp/socket/event_loop.h"
 
+#include <asm-generic/errno-base.h>
 #include <cassert>
 #include <cerrno>
 #include <memory>
+#include <string>
+#include <strings.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
 #include <unistd.h>
@@ -13,6 +16,34 @@
 
 namespace rdmapp {
 namespace socket {
+
+static inline std::string events_string(int events) {
+  std::vector<std::string> parts;
+  if (events & EPOLLIN) {
+    parts.emplace_back("EPOLLIN");
+  }
+  if (events & EPOLLPRI) {
+    parts.emplace_back("EPOLLPRI");
+  }
+  if (events & EPOLLOUT) {
+    parts.emplace_back("EPOLLOUT");
+  }
+  if (events & EPOLLERR) {
+    parts.emplace_back("EPOLLERR");
+  }
+  if (events & EPOLLHUP) {
+    parts.emplace_back("EPOLLHUP");
+  }
+  auto str = std::string();
+  bool first = true;
+  for (auto &&part : parts) {
+    if (!first)
+      str += " | ";
+    str += part;
+    first = false;
+  }
+  return str;
+}
 
 event_loop::event_loop(size_t max_events)
     : epoll_fd_(-1), close_event_fd_(-1), max_events_(max_events) {
@@ -55,20 +86,27 @@ void event_loop::register_write(std::shared_ptr<channel> channel) {
 
 void event_loop::deregister(std::shared_ptr<channel> channel) {
   assert(epoll_fd_ > 0);
+  struct epoll_event event;
+  ::bzero(&event, sizeof(event));
   channels_.erase(channel->fd());
-  check_errno(::epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, channel->fd(), nullptr),
+  check_errno(::epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, channel->fd(), &event),
               "failed to remove fd from epoll");
 }
 
 void event_loop::loop() {
-  std::vector<struct epoll_event> events;
+  std::vector<struct epoll_event> events(max_events_);
   bool close_triggered = false;
   while (!close_triggered) {
     int nr_events = ::epoll_wait(epoll_fd_, &events[0], max_events_, -1);
+    if (nr_events < 0 && errno == EINTR) {
+      continue;
+    }
     check_errno(nr_events, "failed to epoll wait");
     for (int i = 0; i < nr_events; ++i) {
       auto &event = events[i];
       auto fd = event.data.fd;
+      RDMAPP_LOG_DEBUG("fd: %d events: %s", fd,
+                       events_string(event.events).c_str());
       if (event.data.fd == close_event_fd_) {
         close_triggered = true;
         continue;
@@ -79,7 +117,8 @@ void event_loop::loop() {
       if (channel) {
         if (event.events & EPOLLIN || event.events & EPOLLERR) {
           channel->readable_callback();
-        } else if (event.events & EPOLLOUT || event.events & EPOLLERR) {
+        }
+        if (event.events & EPOLLOUT || event.events & EPOLLERR) {
           channel->writable_callback();
         }
       } else {
@@ -114,6 +153,6 @@ event_loop::~event_loop() {
   }
 }
 
-} // namespace detail
+} // namespace socket
 
 } // namespace rdmapp

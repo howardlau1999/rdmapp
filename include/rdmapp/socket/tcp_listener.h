@@ -15,7 +15,7 @@ public:
   struct accept_awaitable {
     std::shared_ptr<channel> channel_;
     void *buffer_;
-    int fd_;
+    int client_fd_;
     int do_io();
 
   public:

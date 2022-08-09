@@ -18,7 +18,6 @@ class event_loop {
   std::unordered_map<int, std::weak_ptr<channel>> channels_;
 
   void register_fd(std::shared_ptr<channel> channel, struct epoll_event *event);
-
 public:
   event_loop(size_t max_events = 10);
   static std::shared_ptr<event_loop> new_loop(size_t max_events = 10);

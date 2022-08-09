@@ -83,6 +83,7 @@ tcp_connection::connect_awaitable::await_resume() {
   int status = ::getsockopt(channel_->fd(), SOL_SOCKET, SO_ERROR, &err, &len);
   check_errno(status, "failed to get socket error");
   check_rc(err, "failed to connect");
+  RDMAPP_LOG_DEBUG("fd %d connected", channel_->fd());
   return std::make_shared<tcp_connection>(channel_);
 }
 
