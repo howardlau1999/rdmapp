@@ -235,38 +235,60 @@ void qp::post_recv(struct ibv_recv_wr &recv_wr,
 
 qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp, void *buffer,
                                    size_t length, enum ibv_wr_opcode opcode)
-    : qp_(qp), buffer_(buffer), length_(length), mr_(nullptr), wc_(),
-      opcode_(opcode), remote_addr_(nullptr), rkey_(0) {}
+    : qp_(qp), local_mr_(qp_->pd_->reg_mr(buffer, length)), wc_(),
+      opcode_(opcode), remote_mr_(nullptr) {}
 qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp, void *buffer,
                                    size_t length, enum ibv_wr_opcode opcode,
-                                   void *remote_addr, uint32_t rkey)
-    : qp_(qp), buffer_(buffer), length_(length), opcode_(opcode),
-      remote_addr_(remote_addr), rkey_(rkey) {}
+                                   std::shared_ptr<mr> remote_mr)
+    : qp_(qp), local_mr_(qp_->pd_->reg_mr(buffer, length)), opcode_(opcode),
+      remote_mr_(remote_mr) {}
 qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp, void *buffer,
                                    size_t length, enum ibv_wr_opcode opcode,
-                                   void *remote_addr, uint32_t rkey,
-                                   uint64_t add)
-    : qp_(qp), buffer_(buffer), length_(length), opcode_(opcode),
-      remote_addr_(remote_addr), rkey_(rkey), compare_add_(add) {}
+                                   std::shared_ptr<mr> remote_mr, uint64_t add)
+    : qp_(qp), local_mr_(qp_->pd_->reg_mr(buffer, length)), opcode_(opcode),
+      remote_mr_(remote_mr), compare_add_(add) {}
 qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp, void *buffer,
                                    size_t length, enum ibv_wr_opcode opcode,
-                                   void *remote_addr, uint32_t rkey,
+                                   std::shared_ptr<mr> remote_mr,
+
                                    uint64_t compare, uint64_t swap)
-    : qp_(qp), buffer_(buffer), length_(length), opcode_(opcode),
-      remote_addr_(remote_addr), rkey_(rkey), compare_add_(compare),
-      swap_(swap) {}
+    : qp_(qp), local_mr_(qp_->pd_->reg_mr(buffer, length)), opcode_(opcode),
+      remote_mr_(remote_mr), compare_add_(compare), swap_(swap) {}
+qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp,
+                                   std::shared_ptr<mr> local_mr,
+                                   enum ibv_wr_opcode opcode)
+    : qp_(qp), local_mr_(local_mr), wc_(), opcode_(opcode),
+      remote_mr_(nullptr) {}
+qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp,
+                                   std::shared_ptr<mr> local_mr,
+                                   enum ibv_wr_opcode opcode,
+                                   std::shared_ptr<mr> remote_mr)
+    : qp_(qp), local_mr_(local_mr), opcode_(opcode), remote_mr_(remote_mr) {}
+qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp,
+                                   std::shared_ptr<mr> local_mr,
+                                   enum ibv_wr_opcode opcode,
+                                   std::shared_ptr<mr> remote_mr, uint64_t add)
+    : qp_(qp), local_mr_(local_mr), opcode_(opcode), remote_mr_(remote_mr),
+      compare_add_(add) {}
+qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp,
+                                   std::shared_ptr<mr> local_mr,
+                                   enum ibv_wr_opcode opcode,
+                                   std::shared_ptr<mr> remote_mr,
+
+                                   uint64_t compare, uint64_t swap)
+    : qp_(qp), local_mr_(local_mr), opcode_(opcode), remote_mr_(remote_mr),
+      compare_add_(compare), swap_(swap) {}
 
 bool qp::send_awaitable::await_ready() const noexcept { return false; }
 void qp::send_awaitable::await_suspend(std::coroutine_handle<> h) {
-  mr_ = qp_->pd_->reg_mr(buffer_, length_);
   auto callback = executor::make_callback([h, this](struct ibv_wc const &wc) {
     wc_ = wc;
     h.resume();
   });
   struct ibv_sge send_sge = {};
-  send_sge.addr = reinterpret_cast<uint64_t>(mr_->addr());
-  send_sge.length = mr_->length();
-  send_sge.lkey = mr_->lkey();
+  send_sge.addr = reinterpret_cast<uint64_t>(local_mr_->addr());
+  send_sge.length = local_mr_->length();
+  send_sge.lkey = local_mr_->lkey();
 
   struct ibv_send_wr send_wr = {};
   struct ibv_send_wr *bad_send_wr = nullptr;
@@ -280,9 +302,10 @@ void qp::send_awaitable::await_suspend(std::coroutine_handle<> h) {
       opcode_ == IBV_WR_RDMA_WRITE_WITH_IMM ||
       opcode_ == IBV_WR_ATOMIC_FETCH_AND_ADD ||
       opcode_ == IBV_WR_ATOMIC_CMP_AND_SWP) {
-    assert(remote_addr_ != nullptr);
-    send_wr.wr.rdma.remote_addr = reinterpret_cast<uint64_t>(remote_addr_);
-    send_wr.wr.rdma.rkey = rkey_;
+    assert(remote_mr_ != nullptr);
+    send_wr.wr.rdma.remote_addr =
+        reinterpret_cast<uint64_t>(remote_mr_->addr());
+    send_wr.wr.rdma.rkey = remote_mr_->rkey();
     if (opcode_ == IBV_WR_ATOMIC_CMP_AND_SWP ||
         opcode_ == IBV_WR_ATOMIC_FETCH_AND_ADD) {
       send_wr.wr.atomic.compare_add = compare_add_;
@@ -309,48 +332,80 @@ qp::send_awaitable qp::send(void *buffer, size_t length) {
                             IBV_WR_SEND);
 }
 
-qp::send_awaitable qp::write(void *remote_addr, uint32_t rkey, void *buffer,
+qp::send_awaitable qp::write(std::shared_ptr<mr> remote_mr, void *buffer,
                              size_t length) {
   return qp::send_awaitable(this->shared_from_this(), buffer, length,
-                            IBV_WR_RDMA_WRITE, remote_addr, rkey);
-}
-qp::send_awaitable qp::read(void *remote_addr, uint32_t rkey, void *buffer,
-                            size_t length) {
-  return qp::send_awaitable(this->shared_from_this(), buffer, length,
-                            IBV_WR_RDMA_READ, remote_addr, rkey);
+                            IBV_WR_RDMA_WRITE, remote_mr);
 }
 
-qp::send_awaitable qp::fetch_and_add(void *remote_addr, uint32_t rkey,
+qp::send_awaitable qp::read(std::shared_ptr<mr> remote_mr, void *buffer,
+                            size_t length) {
+  return qp::send_awaitable(this->shared_from_this(), buffer, length,
+                            IBV_WR_RDMA_READ, remote_mr);
+}
+
+qp::send_awaitable qp::fetch_and_add(std::shared_ptr<mr> remote_mr,
                                      void *buffer, size_t length,
                                      uint64_t add) {
   return qp::send_awaitable(this->shared_from_this(), buffer, length,
-                            IBV_WR_ATOMIC_FETCH_AND_ADD, remote_addr, rkey,
-                            add);
+                            IBV_WR_ATOMIC_FETCH_AND_ADD, remote_mr, add);
 }
 
-qp::send_awaitable qp::compare_and_swap(void *remote_addr, uint32_t rkey,
+qp::send_awaitable qp::compare_and_swap(std::shared_ptr<mr> remote_mr,
                                         void *buffer, size_t length,
                                         uint64_t compare, uint64_t swap) {
   return qp::send_awaitable(this->shared_from_this(), buffer, length,
-                            IBV_WR_ATOMIC_CMP_AND_SWP, remote_addr, rkey,
-                            compare, swap);
+                            IBV_WR_ATOMIC_CMP_AND_SWP, remote_mr, compare,
+                            swap);
+}
+
+qp::send_awaitable qp::send(std::shared_ptr<mr> local_mr) {
+  return qp::send_awaitable(this->shared_from_this(), local_mr,
+                            IBV_WR_SEND);
+}
+
+qp::send_awaitable qp::write(std::shared_ptr<mr> remote_mr, std::shared_ptr<mr> local_mr) {
+  return qp::send_awaitable(this->shared_from_this(), local_mr,
+                            IBV_WR_RDMA_WRITE, remote_mr);
+}
+
+qp::send_awaitable qp::read(std::shared_ptr<mr> remote_mr, std::shared_ptr<mr> local_mr) {
+  return qp::send_awaitable(this->shared_from_this(), local_mr,
+                            IBV_WR_RDMA_READ, remote_mr);
+}
+
+qp::send_awaitable qp::fetch_and_add(std::shared_ptr<mr> remote_mr,
+                                     std::shared_ptr<mr> local_mr,
+                                     uint64_t add) {
+  return qp::send_awaitable(this->shared_from_this(), local_mr,
+                            IBV_WR_ATOMIC_FETCH_AND_ADD, remote_mr, add);
+}
+
+qp::send_awaitable qp::compare_and_swap(std::shared_ptr<mr> remote_mr,
+                                        std::shared_ptr<mr> local_mr,
+                                        uint64_t compare, uint64_t swap) {
+  return qp::send_awaitable(this->shared_from_this(), local_mr,
+                            IBV_WR_ATOMIC_CMP_AND_SWP, remote_mr, compare,
+                            swap);
 }
 
 qp::recv_awaitable::recv_awaitable(std::shared_ptr<qp> qp, void *buffer,
                                    size_t length)
-    : qp_(qp), buffer_(buffer), length_(length), mr_(nullptr), wc_() {}
+    : qp_(qp), local_mr_(qp_->pd_->reg_mr(buffer, length)), wc_() {}
+qp::recv_awaitable::recv_awaitable(std::shared_ptr<qp> qp,
+                                   std::shared_ptr<mr> local_mr)
+    : qp_(qp), local_mr_(local_mr), wc_() {}
 
 bool qp::recv_awaitable::await_ready() const noexcept { return false; }
 void qp::recv_awaitable::await_suspend(std::coroutine_handle<> h) {
-  mr_ = qp_->pd_->reg_mr(buffer_, length_);
   auto callback = executor::make_callback([h, this](struct ibv_wc const &wc) {
     wc_ = wc;
     h.resume();
   });
   struct ibv_sge recv_sge = {};
-  recv_sge.addr = reinterpret_cast<uint64_t>(mr_->addr());
-  recv_sge.length = mr_->length();
-  recv_sge.lkey = mr_->lkey();
+  recv_sge.addr = reinterpret_cast<uint64_t>(local_mr_->addr());
+  recv_sge.length = local_mr_->length();
+  recv_sge.lkey = local_mr_->lkey();
 
   struct ibv_recv_wr recv_wr = {};
   struct ibv_recv_wr *bad_recv_wr = nullptr;
