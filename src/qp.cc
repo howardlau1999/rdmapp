@@ -236,46 +236,45 @@ void qp::post_recv(struct ibv_recv_wr &recv_wr,
 qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp, void *buffer,
                                    size_t length, enum ibv_wr_opcode opcode)
     : qp_(qp), local_mr_(qp_->pd_->reg_mr(buffer, length)), wc_(),
-      opcode_(opcode), remote_mr_(nullptr) {}
-qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp, void *buffer,
-                                   size_t length, enum ibv_wr_opcode opcode,
-                                   std::shared_ptr<mr> remote_mr)
+      opcode_(opcode), remote_mr_() {}
+qp::send_awaitable::send_awaitable(
+    std::shared_ptr<qp> qp, void *buffer, size_t length,
+    enum ibv_wr_opcode opcode, mr<tags::mr::remote> const& remote_mr)
     : qp_(qp), local_mr_(qp_->pd_->reg_mr(buffer, length)), opcode_(opcode),
       remote_mr_(remote_mr) {}
-qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp, void *buffer,
-                                   size_t length, enum ibv_wr_opcode opcode,
-                                   std::shared_ptr<mr> remote_mr, uint64_t add)
+qp::send_awaitable::send_awaitable(
+    std::shared_ptr<qp> qp, void *buffer, size_t length,
+    enum ibv_wr_opcode opcode, mr<tags::mr::remote> const& remote_mr,
+    uint64_t add)
     : qp_(qp), local_mr_(qp_->pd_->reg_mr(buffer, length)), opcode_(opcode),
       remote_mr_(remote_mr), compare_add_(add) {}
-qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp, void *buffer,
-                                   size_t length, enum ibv_wr_opcode opcode,
-                                   std::shared_ptr<mr> remote_mr,
+qp::send_awaitable::send_awaitable(
+    std::shared_ptr<qp> qp, void *buffer, size_t length,
+    enum ibv_wr_opcode opcode, mr<tags::mr::remote> const& remote_mr,
 
-                                   uint64_t compare, uint64_t swap)
+    uint64_t compare, uint64_t swap)
     : qp_(qp), local_mr_(qp_->pd_->reg_mr(buffer, length)), opcode_(opcode),
       remote_mr_(remote_mr), compare_add_(compare), swap_(swap) {}
-qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp,
-                                   std::shared_ptr<mr> local_mr,
-                                   enum ibv_wr_opcode opcode)
+qp::send_awaitable::send_awaitable(
+    std::shared_ptr<qp> qp, std::shared_ptr<mr<tags::mr::local>> local_mr,
+    enum ibv_wr_opcode opcode)
     : qp_(qp), local_mr_(local_mr), wc_(), opcode_(opcode),
-      remote_mr_(nullptr) {}
-qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp,
-                                   std::shared_ptr<mr> local_mr,
-                                   enum ibv_wr_opcode opcode,
-                                   std::shared_ptr<mr> remote_mr)
+      remote_mr_() {}
+qp::send_awaitable::send_awaitable(
+    std::shared_ptr<qp> qp, std::shared_ptr<mr<tags::mr::local>> local_mr,
+    enum ibv_wr_opcode opcode, mr<tags::mr::remote> const& remote_mr)
     : qp_(qp), local_mr_(local_mr), opcode_(opcode), remote_mr_(remote_mr) {}
-qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp,
-                                   std::shared_ptr<mr> local_mr,
-                                   enum ibv_wr_opcode opcode,
-                                   std::shared_ptr<mr> remote_mr, uint64_t add)
+qp::send_awaitable::send_awaitable(
+    std::shared_ptr<qp> qp, std::shared_ptr<mr<tags::mr::local>> local_mr,
+    enum ibv_wr_opcode opcode, mr<tags::mr::remote> const& remote_mr,
+    uint64_t add)
     : qp_(qp), local_mr_(local_mr), opcode_(opcode), remote_mr_(remote_mr),
       compare_add_(add) {}
-qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp,
-                                   std::shared_ptr<mr> local_mr,
-                                   enum ibv_wr_opcode opcode,
-                                   std::shared_ptr<mr> remote_mr,
+qp::send_awaitable::send_awaitable(
+    std::shared_ptr<qp> qp, std::shared_ptr<mr<tags::mr::local>> local_mr,
+    enum ibv_wr_opcode opcode, mr<tags::mr::remote> const& remote_mr,
 
-                                   uint64_t compare, uint64_t swap)
+    uint64_t compare, uint64_t swap)
     : qp_(qp), local_mr_(local_mr), opcode_(opcode), remote_mr_(remote_mr),
       compare_add_(compare), swap_(swap) {}
 
@@ -302,10 +301,10 @@ void qp::send_awaitable::await_suspend(std::coroutine_handle<> h) {
       opcode_ == IBV_WR_RDMA_WRITE_WITH_IMM ||
       opcode_ == IBV_WR_ATOMIC_FETCH_AND_ADD ||
       opcode_ == IBV_WR_ATOMIC_CMP_AND_SWP) {
-    assert(remote_mr_ != nullptr);
+    assert(remote_mr_.addr() != nullptr);
     send_wr.wr.rdma.remote_addr =
-        reinterpret_cast<uint64_t>(remote_mr_->addr());
-    send_wr.wr.rdma.rkey = remote_mr_->rkey();
+        reinterpret_cast<uint64_t>(remote_mr_.addr());
+    send_wr.wr.rdma.rkey = remote_mr_.rkey();
     if (opcode_ == IBV_WR_ATOMIC_CMP_AND_SWP ||
         opcode_ == IBV_WR_ATOMIC_FETCH_AND_ADD) {
       send_wr.wr.atomic.compare_add = compare_add_;
@@ -332,58 +331,61 @@ qp::send_awaitable qp::send(void *buffer, size_t length) {
                             IBV_WR_SEND);
 }
 
-qp::send_awaitable qp::write(std::shared_ptr<mr> remote_mr, void *buffer,
-                             size_t length) {
+qp::send_awaitable qp::write(mr<tags::mr::remote> const& remote_mr,
+                             void *buffer, size_t length) {
   return qp::send_awaitable(this->shared_from_this(), buffer, length,
                             IBV_WR_RDMA_WRITE, remote_mr);
 }
 
-qp::send_awaitable qp::read(std::shared_ptr<mr> remote_mr, void *buffer,
-                            size_t length) {
+qp::send_awaitable qp::read(mr<tags::mr::remote> const& remote_mr,
+                            void *buffer, size_t length) {
   return qp::send_awaitable(this->shared_from_this(), buffer, length,
                             IBV_WR_RDMA_READ, remote_mr);
 }
 
-qp::send_awaitable qp::fetch_and_add(std::shared_ptr<mr> remote_mr,
-                                     void *buffer, size_t length,
-                                     uint64_t add) {
+qp::send_awaitable
+qp::fetch_and_add(mr<tags::mr::remote> const& remote_mr, void *buffer,
+                  size_t length, uint64_t add) {
   return qp::send_awaitable(this->shared_from_this(), buffer, length,
                             IBV_WR_ATOMIC_FETCH_AND_ADD, remote_mr, add);
 }
 
-qp::send_awaitable qp::compare_and_swap(std::shared_ptr<mr> remote_mr,
-                                        void *buffer, size_t length,
-                                        uint64_t compare, uint64_t swap) {
+qp::send_awaitable
+qp::compare_and_swap(mr<tags::mr::remote> const& remote_mr,
+                     void *buffer, size_t length, uint64_t compare,
+                     uint64_t swap) {
   return qp::send_awaitable(this->shared_from_this(), buffer, length,
                             IBV_WR_ATOMIC_CMP_AND_SWP, remote_mr, compare,
                             swap);
 }
 
-qp::send_awaitable qp::send(std::shared_ptr<mr> local_mr) {
-  return qp::send_awaitable(this->shared_from_this(), local_mr,
-                            IBV_WR_SEND);
+qp::send_awaitable qp::send(std::shared_ptr<mr<tags::mr::local>> local_mr) {
+  return qp::send_awaitable(this->shared_from_this(), local_mr, IBV_WR_SEND);
 }
 
-qp::send_awaitable qp::write(std::shared_ptr<mr> remote_mr, std::shared_ptr<mr> local_mr) {
+qp::send_awaitable qp::write(mr<tags::mr::remote> const& remote_mr,
+                             std::shared_ptr<mr<tags::mr::local>> local_mr) {
   return qp::send_awaitable(this->shared_from_this(), local_mr,
                             IBV_WR_RDMA_WRITE, remote_mr);
 }
 
-qp::send_awaitable qp::read(std::shared_ptr<mr> remote_mr, std::shared_ptr<mr> local_mr) {
+qp::send_awaitable qp::read(mr<tags::mr::remote> const& remote_mr,
+                            std::shared_ptr<mr<tags::mr::local>> local_mr) {
   return qp::send_awaitable(this->shared_from_this(), local_mr,
                             IBV_WR_RDMA_READ, remote_mr);
 }
 
-qp::send_awaitable qp::fetch_and_add(std::shared_ptr<mr> remote_mr,
-                                     std::shared_ptr<mr> local_mr,
-                                     uint64_t add) {
+qp::send_awaitable
+qp::fetch_and_add(mr<tags::mr::remote> const& remote_mr,
+                  std::shared_ptr<mr<tags::mr::local>> local_mr, uint64_t add) {
   return qp::send_awaitable(this->shared_from_this(), local_mr,
                             IBV_WR_ATOMIC_FETCH_AND_ADD, remote_mr, add);
 }
 
-qp::send_awaitable qp::compare_and_swap(std::shared_ptr<mr> remote_mr,
-                                        std::shared_ptr<mr> local_mr,
-                                        uint64_t compare, uint64_t swap) {
+qp::send_awaitable
+qp::compare_and_swap(mr<tags::mr::remote> const& remote_mr,
+                     std::shared_ptr<mr<tags::mr::local>> local_mr,
+                     uint64_t compare, uint64_t swap) {
   return qp::send_awaitable(this->shared_from_this(), local_mr,
                             IBV_WR_ATOMIC_CMP_AND_SWP, remote_mr, compare,
                             swap);
@@ -392,8 +394,8 @@ qp::send_awaitable qp::compare_and_swap(std::shared_ptr<mr> remote_mr,
 qp::recv_awaitable::recv_awaitable(std::shared_ptr<qp> qp, void *buffer,
                                    size_t length)
     : qp_(qp), local_mr_(qp_->pd_->reg_mr(buffer, length)), wc_() {}
-qp::recv_awaitable::recv_awaitable(std::shared_ptr<qp> qp,
-                                   std::shared_ptr<mr> local_mr)
+qp::recv_awaitable::recv_awaitable(
+    std::shared_ptr<qp> qp, std::shared_ptr<mr<tags::mr::local>> local_mr)
     : qp_(qp), local_mr_(local_mr), wc_() {}
 
 bool qp::recv_awaitable::await_ready() const noexcept { return false; }
