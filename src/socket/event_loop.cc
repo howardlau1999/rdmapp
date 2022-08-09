@@ -1,6 +1,5 @@
 #include "rdmapp/socket/event_loop.h"
 
-#include <asm-generic/errno-base.h>
 #include <cassert>
 #include <cerrno>
 #include <memory>
