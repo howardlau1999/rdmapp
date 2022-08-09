@@ -27,6 +27,8 @@ void cq_poller::worker() {
   while (!stopped_) {
     try {
       if (cq_->poll(wc)) {
+        RDMAPP_LOG_TRACE("polled cqe wr_id=%p status=%d",
+                         reinterpret_cast<void *>(wc.wr_id), wc.status);
         executor_->process_wc(wc);
       }
     } catch (std::runtime_error &e) {

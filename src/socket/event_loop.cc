@@ -1,5 +1,6 @@
 #include "rdmapp/socket/event_loop.h"
 
+#include <asm-generic/errno-base.h>
 #include <cassert>
 #include <cerrno>
 #include <memory>
@@ -64,8 +65,10 @@ std::shared_ptr<event_loop> event_loop::new_loop(size_t max_events) {
 void event_loop::register_channel(std::shared_ptr<channel> channel,
                                   struct epoll_event *event) {
   assert(epoll_fd_ > 0);
-  check_errno(::epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, channel->fd(), event),
-              "failed to add fd to epoll");
+  RDMAPP_LOG_TRACE("epoll add fd=%d events=%s", channel->fd(),
+                   events_string(event->events).c_str());
+  auto rc = ::epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, channel->fd(), event);
+  check_errno(rc, "failed to add fd to epoll");
   channels_.insert(std::make_pair(channel->fd(), channel));
 }
 
@@ -89,8 +92,9 @@ void event_loop::deregister(socket::channel &channel) {
   ::bzero(&event, sizeof(event));
   channels_.erase(channel.fd());
   auto rc = ::epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, channel.fd(), &event);
-  if (rc < 0 && errno != ENOENT)
+  if (rc < 0 && errno != ENOENT) {
     check_errno(rc, "failed to remove fd from epoll");
+  }
 }
 
 void event_loop::loop() {
@@ -105,7 +109,7 @@ void event_loop::loop() {
     for (int i = 0; i < nr_events; ++i) {
       auto &event = events[i];
       auto fd = event.data.fd;
-      RDMAPP_LOG_DEBUG("fd: %d events: %s", fd,
+      RDMAPP_LOG_TRACE("fd: %d events: %s", fd,
                        events_string(event.events).c_str());
       if (event.data.fd == close_event_fd_) {
         close_triggered = true;
@@ -147,7 +151,7 @@ event_loop::~event_loop() {
       RDMAPP_LOG_ERROR("failed to close event fd %d: %s (errno=%d)",
                        close_event_fd_, strerror(errno), errno);
     } else {
-      RDMAPP_LOG_DEBUG("closed event fd %d", close_event_fd_);
+      RDMAPP_LOG_TRACE("closed event fd %d", close_event_fd_);
     }
   }
   if (epoll_fd_ > 0) {
@@ -155,7 +159,7 @@ event_loop::~event_loop() {
       RDMAPP_LOG_ERROR("failed to close epoll fd %d: %s (errno=%d)", epoll_fd_,
                        strerror(errno), errno);
     } else {
-      RDMAPP_LOG_DEBUG("closed epoll fd %d", epoll_fd_);
+      RDMAPP_LOG_TRACE("closed epoll fd %d", epoll_fd_);
     }
   }
 }

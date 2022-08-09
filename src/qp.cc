@@ -103,8 +103,9 @@ void qp::create() {
 
   qp_ = ::ibv_create_qp(pd_->pd_, &qp_init_attr);
   check_ptr(qp_, "failed to create qp");
-  RDMAPP_LOG_DEBUG("created qp %p", qp_);
   sq_psn_ = next_sq_psn.fetch_add(1);
+  RDMAPP_LOG_TRACE("created qp %p lid=%u qpn=%u psn=%u", qp_,
+                   pd_->device_->lid(), qp_->qp_num, sq_psn_);
 }
 
 void qp::init() {
@@ -160,6 +161,7 @@ void qp::rts() {
                                IBV_QP_MAX_QP_RD_ATOMIC),
            "failed to transition qp to rts state");
 }
+
 task<deserialized_qp> qp::recv_qp(socket::tcp_connection &connection) {
   int read = 0;
   uint8_t header[deserialized_qp::qp_header::kSerializedSize];
@@ -173,7 +175,7 @@ task<deserialized_qp> qp::recv_qp(socket::tcp_connection &connection) {
   }
 
   auto remote_qp = deserialized_qp::deserialize(header);
-  RDMAPP_LOG_DEBUG("received header lid=%u qpn=%u psn=%u user_data_size=%u",
+  RDMAPP_LOG_TRACE("received header lid=%u qpn=%u psn=%u user_data_size=%u",
                    remote_qp.header.lid, remote_qp.header.qp_num,
                    remote_qp.header.sq_psn, remote_qp.header.user_data_size);
   remote_qp.user_data.resize(remote_qp.header.user_data_size);
@@ -192,7 +194,7 @@ task<deserialized_qp> qp::recv_qp(socket::tcp_connection &connection) {
       user_data_read += n;
     }
   }
-  RDMAPP_LOG_DEBUG("received user data");
+  RDMAPP_LOG_TRACE("received user data");
   co_return remote_qp;
 }
 
@@ -209,7 +211,7 @@ task<void> qp::send_qp(socket::tcp_connection &connection) {
     check_errno(n, "failed to send qp");
     local_qp_sent += n;
   }
-  RDMAPP_LOG_DEBUG("sent qp lid=%u qpn=%u psn=%u user_data_size=%lu",
+  RDMAPP_LOG_TRACE("sent qp lid=%u qpn=%u psn=%u user_data_size=%lu",
                    pd_->device_->lid(), qp_->qp_num, sq_psn_,
                    user_data_.size());
   co_return;
@@ -339,7 +341,7 @@ qp::~qp() {
     if (auto rc = ::ibv_destroy_qp(qp_); rc != 0) {
       RDMAPP_LOG_ERROR("failed to destroy qp %p: %s", qp_, strerror(errno));
     } else {
-      RDMAPP_LOG_DEBUG("destroyed qp %p", qp_);
+      RDMAPP_LOG_TRACE("destroyed qp %p", qp_);
     }
   }
 }

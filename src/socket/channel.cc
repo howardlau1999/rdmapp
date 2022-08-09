@@ -32,15 +32,15 @@ void channel::set_nonblocking(int fd) {
 void channel::set_nonblocking() { set_nonblocking(fd_); }
 
 void channel::writable_callback() {
+  loop_->deregister(*this);
   writable_callback_();
   writable_callback_ = noop_callback;
-  loop_->deregister(*this);
 }
 
 void channel::readable_callback() {
+  loop_->deregister(*this);
   readable_callback_();
   readable_callback_ = noop_callback;
-  loop_->deregister(*this);
 }
 
 void channel::wait_readable() {
@@ -70,7 +70,7 @@ channel::~channel() {
     RDMAPP_LOG_ERROR("failed to close fd %d: %s (errno=%d)", fd_,
                      strerror(errno), errno);
   } else {
-    RDMAPP_LOG_DEBUG("closed fd %d", fd_);
+    RDMAPP_LOG_TRACE("closed fd %d", fd_);
   }
 }
 

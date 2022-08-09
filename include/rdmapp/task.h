@@ -1,9 +1,9 @@
 #pragma once
 
-#include "rdmapp/detail/debug.h"
-
 #include <coroutine>
 #include <exception>
+
+#include "rdmapp/detail/debug.h"
 
 namespace rdmapp {
 
@@ -34,27 +34,40 @@ template <class T> struct task_awaiter;
 template <> struct task_awaiter<void> {
   std::coroutine_handle<> h_;
   std::coroutine_handle<> &continuation_;
-  task_awaiter(std::coroutine_handle<> h, std::coroutine_handle<> &continuation)
-      : h_(h), continuation_(continuation) {}
+  std::exception_ptr &exception_;
+  task_awaiter(std::coroutine_handle<> h, std::coroutine_handle<> &continuation,
+               std::exception_ptr &exception)
+      : h_(h), continuation_(continuation), exception_(exception) {}
   bool await_ready() { return h_.done(); }
   auto await_suspend(std::coroutine_handle<> suspended) {
     continuation_ = suspended;
   }
-  void await_resume() {}
+  void await_resume() {
+    if (exception_) {
+      std::rethrow_exception(exception_);
+    }
+  }
 };
 
 template <class T> struct task_awaiter {
   std::coroutine_handle<> h_;
   std::coroutine_handle<> &continuation_;
+  std::exception_ptr &exception_;
   T &value_;
   task_awaiter(std::coroutine_handle<> h, std::coroutine_handle<> &continuation,
-               T &value)
-      : h_(h), continuation_(continuation), value_(value) {}
+               std::exception_ptr &exception, T &value)
+      : h_(h), continuation_(continuation), exception_(exception),
+        value_(value) {}
   bool await_ready() { return h_.done(); }
   auto await_suspend(std::coroutine_handle<> suspended) {
     continuation_ = suspended;
   }
-  auto await_resume() { return value_; }
+  auto await_resume() {
+    if (exception_) {
+      std::rethrow_exception(exception_);
+    }
+    return value_;
+  }
 };
 
 template <class T> struct task {
@@ -69,7 +82,8 @@ template <class T> struct task {
   using coroutine_handle_type = std::coroutine_handle<promise_type>;
 
   auto operator co_await() const {
-    return task_awaiter<T>(h_, h_.promise().continuation_, h_.promise().value_);
+    return task_awaiter<T>(h_, h_.promise().continuation_,
+                           h_.promise().exception_, h_.promise().value_);
   }
   ~task() { h_.destroy(); }
   task(coroutine_handle_type h) : h_(h) {}
@@ -88,7 +102,8 @@ template <> struct task<void> {
   using coroutine_handle_type = std::coroutine_handle<promise_type>;
 
   auto operator co_await() const {
-    return task_awaiter<void>(h_, h_.promise().continuation_);
+    return task_awaiter<void>(h_, h_.promise().continuation_,
+                              h_.promise().exception_);
   }
   ~task() { h_.destroy(); }
   task(coroutine_handle_type h) : h_(h) {}
