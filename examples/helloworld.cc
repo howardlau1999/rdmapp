@@ -6,11 +6,7 @@
 #include <rdmapp/rdmapp.h>
 #include <string>
 #include <thread>
-
-#include "rdmapp/acceptor.h"
-#include "rdmapp/detail/debug.h"
-#include "rdmapp/socket/channel.h"
-#include "rdmapp/socket/tcp_connection.h"
+#include "rdmapp/connector.h"
 
 using namespace std::literals::chrono_literals;
 
@@ -24,20 +20,15 @@ rdmapp::task<void> server(rdmapp::acceptor &acceptor) {
   co_return;
 }
 
-rdmapp::task<int> client(std::shared_ptr<rdmapp::pd> pd,
-                         std::shared_ptr<rdmapp::cq> cq,
-                         std::shared_ptr<rdmapp::socket::event_loop> loop,
-                         std::string const &hostname, uint16_t port) {
-  auto connection =
-      co_await rdmapp::socket::tcp_connection::connect(loop, hostname, port);
-  auto qp = co_await rdmapp::qp::from_tcp_connection(*connection, pd, cq);
+rdmapp::task<void> client(rdmapp::connector &connector) {
+  auto qp = co_await connector.connect();
   char buffer[6];
   co_await qp->recv(buffer, sizeof(buffer));
   std::cout << "Received from server: " << buffer << std::endl;
   std::copy_n("world", sizeof(buffer), buffer);
   co_await qp->send(buffer, sizeof(buffer));
   std::cout << "Sent to server: " << buffer << std::endl;
-  co_return 0;
+  co_return;
 }
 
 int main(int argc, char *argv[]) {
@@ -48,7 +39,7 @@ int main(int argc, char *argv[]) {
   auto loop = rdmapp::socket::event_loop::new_loop();
   auto looper = std::thread([loop]() { loop->loop(); });
   if (argc == 2) {
-    rdmapp::acceptor acceptor(pd, cq, loop, std::stoi(argv[1]));
+    rdmapp::acceptor acceptor(loop, std::stoi(argv[1]), pd, cq);
     auto coro = server(acceptor);
     while (!coro.h_.done()) {
       std::this_thread::yield();
@@ -57,7 +48,8 @@ int main(int argc, char *argv[]) {
       std::rethrow_exception(exception);
     }
   } else if (argc == 3) {
-    auto coro = client(pd, cq, loop, argv[1], std::stoi(argv[2]));
+    rdmapp::connector connector(loop, argv[1] , std::stoi(argv[2]), pd, cq);
+    auto coro = client(connector);
     while (!coro.h_.done()) {
       std::this_thread::yield();
     }

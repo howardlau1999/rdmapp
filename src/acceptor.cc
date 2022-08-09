@@ -23,28 +23,31 @@
 #include "rdmapp/socket/channel.h"
 #include "rdmapp/socket/tcp_connection.h"
 #include "rdmapp/socket/tcp_listener.h"
+#include "rdmapp/srq.h"
 
 namespace rdmapp {
 
-acceptor::acceptor(std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
-                   std::shared_ptr<socket::event_loop> loop, uint16_t port)
-    : acceptor(pd, cq, cq, loop, port) {}
+acceptor::acceptor(std::shared_ptr<socket::event_loop> loop, uint16_t port,
+                   std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
+                   std::shared_ptr<srq> srq)
+    : acceptor(loop, port, pd, cq, cq, srq) {}
 
-acceptor::acceptor(std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
-                   std::shared_ptr<cq> send_cq,
-                   std::shared_ptr<socket::event_loop> loop, uint16_t port)
-    : acceptor(pd, recv_cq, send_cq, loop, "", port) {}
+acceptor::acceptor(std::shared_ptr<socket::event_loop> loop, uint16_t port,
+                   std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
+                   std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq)
+    : acceptor(loop, "", port, pd, recv_cq, send_cq, srq) {}
 
-acceptor::acceptor(std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
-                   std::shared_ptr<socket::event_loop> loop,
-                   std::string const &hostname, uint16_t port)
-    : acceptor(pd, cq, cq, loop, hostname, port) {}
+acceptor::acceptor(std::shared_ptr<socket::event_loop> loop,
+                   std::string const &hostname, uint16_t port,
+                   std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
+                   std::shared_ptr<srq> srq)
+    : acceptor(loop, hostname, port, pd, cq, cq, srq) {}
 
-acceptor::acceptor(std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
-                   std::shared_ptr<cq> send_cq,
-                   std::shared_ptr<socket::event_loop> loop,
-                   std::string const &hostname, uint16_t port)
-    : pd_(pd), recv_cq_(recv_cq), send_cq_(send_cq),
+acceptor::acceptor(std::shared_ptr<socket::event_loop> loop,
+                   std::string const &hostname, uint16_t port,
+                   std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
+                   std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq)
+    : pd_(pd), recv_cq_(recv_cq), send_cq_(send_cq), srq_(srq),
       listener_(std::make_unique<socket::tcp_listener>(loop, hostname, port)) {}
 
 task<std::shared_ptr<qp>> acceptor::accept() {

@@ -27,6 +27,7 @@ set(RDMAPP_SOURCE_FILES
   src/acceptor.cc
   src/qp.cc
   src/srq.cc
+  src/connector.cc
   src/cq_poller.cc
   src/executor.cc
   src/mr.cc

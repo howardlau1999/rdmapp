@@ -1,6 +1,7 @@
 #pragma once
 
 #include "acceptor.h"
+#include "connector.h"
 #include "cq.h"
 #include "cq_poller.h"
 #include "device.h"
