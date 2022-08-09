@@ -57,6 +57,8 @@ public:
   class send_awaitable {
     std::shared_ptr<qp> qp_;
     std::shared_ptr<mr> mr_;
+    uint64_t compare_add_;
+    uint64_t swap_;
     struct ibv_wc wc_;
     void *buffer_;
     size_t length_;
@@ -69,6 +71,10 @@ public:
                    enum ibv_wr_opcode opcode);
     send_awaitable(std::shared_ptr<qp> qp, void *buffer, size_t length,
                    enum ibv_wr_opcode opcode, void *remote_addr, uint32_t rkey);
+    send_awaitable(std::shared_ptr<qp> qp, void *buffer, size_t length,
+                   enum ibv_wr_opcode opcode, void *remote_addr, uint32_t rkey, uint64_t add);
+    send_awaitable(std::shared_ptr<qp> qp, void *buffer, size_t length,
+                   enum ibv_wr_opcode opcode, void *remote_addr, uint32_t rkey, uint64_t compare, uint64_t swap);
     bool await_ready() const noexcept;
     void await_suspend(std::coroutine_handle<> h);
     void await_resume();
@@ -116,6 +122,10 @@ public:
                        size_t length);
   send_awaitable read(void *remote_addr, uint32_t rkey, void *buffer,
                       size_t length);
+  send_awaitable fetch_and_add(void *remote_addr, uint32_t rkey, void *buffer,
+                      size_t length, uint64_t add);
+  send_awaitable compare_and_swap(void *remote_addr, uint32_t rkey, void *buffer,
+                      size_t length, uint64_t compare, uint64_t swap);
   recv_awaitable recv(void *buffer, size_t length);
 
   static task<deserialized_qp> recv_qp(socket::tcp_connection &connection);

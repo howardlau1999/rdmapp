@@ -242,6 +242,20 @@ qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp, void *buffer,
                                    void *remote_addr, uint32_t rkey)
     : qp_(qp), buffer_(buffer), length_(length), opcode_(opcode),
       remote_addr_(remote_addr), rkey_(rkey) {}
+qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp, void *buffer,
+                                   size_t length, enum ibv_wr_opcode opcode,
+                                   void *remote_addr, uint32_t rkey,
+                                   uint64_t add)
+    : qp_(qp), buffer_(buffer), length_(length), opcode_(opcode),
+      remote_addr_(remote_addr), rkey_(rkey), compare_add_(add) {}
+qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp, void *buffer,
+                                   size_t length, enum ibv_wr_opcode opcode,
+                                   void *remote_addr, uint32_t rkey,
+                                   uint64_t compare, uint64_t swap)
+    : qp_(qp), buffer_(buffer), length_(length), opcode_(opcode),
+      remote_addr_(remote_addr), rkey_(rkey), compare_add_(compare),
+      swap_(swap) {}
+
 bool qp::send_awaitable::await_ready() const noexcept { return false; }
 void qp::send_awaitable::await_suspend(std::coroutine_handle<> h) {
   mr_ = qp_->pd_->reg_mr(buffer_, length_);
@@ -263,10 +277,19 @@ void qp::send_awaitable::await_suspend(std::coroutine_handle<> h) {
   send_wr.send_flags = IBV_SEND_SIGNALED;
   send_wr.sg_list = &send_sge;
   if (opcode_ == IBV_WR_RDMA_READ || opcode_ == IBV_WR_RDMA_WRITE ||
-      opcode_ == IBV_WR_RDMA_WRITE_WITH_IMM) {
+      opcode_ == IBV_WR_RDMA_WRITE_WITH_IMM ||
+      opcode_ == IBV_WR_ATOMIC_FETCH_AND_ADD ||
+      opcode_ == IBV_WR_ATOMIC_CMP_AND_SWP) {
     assert(remote_addr_ != nullptr);
     send_wr.wr.rdma.remote_addr = reinterpret_cast<uint64_t>(remote_addr_);
     send_wr.wr.rdma.rkey = rkey_;
+    if (opcode_ == IBV_WR_ATOMIC_CMP_AND_SWP ||
+        opcode_ == IBV_WR_ATOMIC_FETCH_AND_ADD) {
+      send_wr.wr.atomic.compare_add = compare_add_;
+      if (opcode_ == IBV_WR_ATOMIC_CMP_AND_SWP) {
+        send_wr.wr.atomic.swap = swap_;
+      }
+    }
   }
 
   try {
@@ -295,6 +318,22 @@ qp::send_awaitable qp::read(void *remote_addr, uint32_t rkey, void *buffer,
                             size_t length) {
   return qp::send_awaitable(this->shared_from_this(), buffer, length,
                             IBV_WR_RDMA_READ, remote_addr, rkey);
+}
+
+qp::send_awaitable qp::fetch_and_add(void *remote_addr, uint32_t rkey,
+                                     void *buffer, size_t length,
+                                     uint64_t add) {
+  return qp::send_awaitable(this->shared_from_this(), buffer, length,
+                            IBV_WR_ATOMIC_FETCH_AND_ADD, remote_addr, rkey,
+                            add);
+}
+
+qp::send_awaitable qp::compare_and_swap(void *remote_addr, uint32_t rkey,
+                                        void *buffer, size_t length,
+                                        uint64_t compare, uint64_t swap) {
+  return qp::send_awaitable(this->shared_from_this(), buffer, length,
+                            IBV_WR_ATOMIC_CMP_AND_SWP, remote_addr, rkey,
+                            compare, swap);
 }
 
 qp::recv_awaitable::recv_awaitable(std::shared_ptr<qp> qp, void *buffer,
