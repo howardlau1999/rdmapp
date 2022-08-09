@@ -41,6 +41,27 @@ qp::qp(uint16_t remote_device_id, uint32_t remote_qpn, uint32_t remote_psn,
   rts();
 }
 
+task<std::shared_ptr<qp>>
+qp::from_tcp_connection(socket::tcp_connection &connection,
+                        std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
+                        std::shared_ptr<srq> srq) {
+  return from_tcp_connection(connection, pd, cq, cq, srq);
+}
+
+task<std::shared_ptr<qp>>
+qp::from_tcp_connection(socket::tcp_connection &connection,
+                        std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
+                        std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq) {
+  auto qp_ptr = std::make_shared<qp>(pd, recv_cq, send_cq, srq);
+  co_await qp_ptr->send_qp(connection);
+  auto remote_qp = co_await qp::recv_qp(connection);
+  qp_ptr->rtr(remote_qp.header.lid, remote_qp.header.qp_num,
+              remote_qp.header.sq_psn);
+  qp_ptr->user_data() = std::move(remote_qp.user_data);
+  qp_ptr->rts();
+  co_return qp_ptr;
+}
+
 qp::qp(std::shared_ptr<rdmapp::pd> pd, std::shared_ptr<cq> cq,
        std::shared_ptr<srq> srq)
     : qp(pd, cq, cq, srq) {}
@@ -61,7 +82,7 @@ std::vector<uint8_t> qp::serialize() const {
   detail::serialize(qp_->qp_num, it);
   detail::serialize(sq_psn_, it);
   detail::serialize(static_cast<uint32_t>(user_data_.size()), it);
-  std::copy(user_data_.cbegin(), user_data_.cend(), std::back_inserter(buffer));
+  std::copy(user_data_.cbegin(), user_data_.cend(), it);
   return buffer;
 }
 
@@ -95,9 +116,9 @@ void qp::init() {
   qp_attr.qp_access_flags = IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ |
                             IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_ATOMIC;
 
-  check_rc(ibv_modify_qp(qp_, &(qp_attr),
-                         IBV_QP_STATE | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS |
-                             IBV_QP_PKEY_INDEX),
+  check_rc(::ibv_modify_qp(qp_, &(qp_attr),
+                           IBV_QP_STATE | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS |
+                               IBV_QP_PKEY_INDEX),
            "failed to transition qp to init state");
 }
 
@@ -152,6 +173,9 @@ task<deserialized_qp> qp::recv_qp(socket::tcp_connection &connection) {
   }
 
   auto remote_qp = deserialized_qp::deserialize(header);
+  RDMAPP_LOG_DEBUG("received header lid=%u qpn=%u psn=%u user_data_size=%u",
+                   remote_qp.header.lid, remote_qp.header.qp_num,
+                   remote_qp.header.sq_psn, remote_qp.header.user_data_size);
   remote_qp.user_data.resize(remote_qp.header.user_data_size);
 
   if (remote_qp.header.user_data_size > 0) {
@@ -168,6 +192,7 @@ task<deserialized_qp> qp::recv_qp(socket::tcp_connection &connection) {
       user_data_read += n;
     }
   }
+  RDMAPP_LOG_DEBUG("received user data");
   co_return remote_qp;
 }
 
@@ -184,6 +209,9 @@ task<void> qp::send_qp(socket::tcp_connection &connection) {
     check_errno(n, "failed to send qp");
     local_qp_sent += n;
   }
+  RDMAPP_LOG_DEBUG("sent qp lid=%u qpn=%u psn=%u user_data_size=%lu",
+                   pd_->device_->lid(), qp_->qp_num, sq_psn_,
+                   user_data_.size());
   co_return;
 }
 

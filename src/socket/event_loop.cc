@@ -1,6 +1,5 @@
 #include "rdmapp/socket/event_loop.h"
 
-#include <asm-generic/errno-base.h>
 #include <cassert>
 #include <cerrno>
 #include <memory>
@@ -62,8 +61,8 @@ std::shared_ptr<event_loop> event_loop::new_loop(size_t max_events) {
   return std::make_shared<event_loop>(max_events);
 }
 
-void event_loop::register_fd(std::shared_ptr<channel> channel,
-                             struct epoll_event *event) {
+void event_loop::register_channel(std::shared_ptr<channel> channel,
+                                  struct epoll_event *event) {
   assert(epoll_fd_ > 0);
   check_errno(::epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, channel->fd(), event),
               "failed to add fd to epoll");
@@ -74,23 +73,24 @@ void event_loop::register_read(std::shared_ptr<channel> channel) {
   struct epoll_event event;
   event.data.fd = channel->fd();
   event.events = EPOLLIN | EPOLLPRI;
-  register_fd(channel, &event);
+  register_channel(channel, &event);
 }
 
 void event_loop::register_write(std::shared_ptr<channel> channel) {
   struct epoll_event event;
   event.data.fd = channel->fd();
   event.events = EPOLLOUT;
-  register_fd(channel, &event);
+  register_channel(channel, &event);
 }
 
-void event_loop::deregister(std::shared_ptr<channel> channel) {
+void event_loop::deregister(socket::channel &channel) {
   assert(epoll_fd_ > 0);
   struct epoll_event event;
   ::bzero(&event, sizeof(event));
-  channels_.erase(channel->fd());
-  check_errno(::epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, channel->fd(), &event),
-              "failed to remove fd from epoll");
+  channels_.erase(channel.fd());
+  auto rc = ::epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, channel.fd(), &event);
+  if (rc < 0 && errno != ENOENT)
+    check_errno(rc, "failed to remove fd from epoll");
 }
 
 void event_loop::loop() {
@@ -117,9 +117,15 @@ void event_loop::loop() {
       if (channel) {
         if (event.events & EPOLLIN || event.events & EPOLLERR) {
           channel->readable_callback();
+          if (event.events & EPOLLERR) {
+            channels_.erase(fd);
+          }
         }
         if (event.events & EPOLLOUT || event.events & EPOLLERR) {
           channel->writable_callback();
+          if (event.events & EPOLLERR) {
+            channels_.erase(fd);
+          }
         }
       } else {
         channels_.erase(fd);
@@ -129,12 +135,13 @@ void event_loop::loop() {
 }
 
 void event_loop::close() {
-  int one = 1;
+  uint64_t one = 1;
   check_errno(::write(close_event_fd_, &one, sizeof(one)),
               "failed to write event fd");
 }
 
 event_loop::~event_loop() {
+  channels_.clear();
   if (close_event_fd_ > 0) {
     if (auto rc = ::close(close_event_fd_); rc != 0) {
       RDMAPP_LOG_ERROR("failed to close event fd %d: %s (errno=%d)",

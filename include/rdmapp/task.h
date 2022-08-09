@@ -36,7 +36,7 @@ template <> struct task_awaiter<void> {
   std::coroutine_handle<> &continuation_;
   task_awaiter(std::coroutine_handle<> h, std::coroutine_handle<> &continuation)
       : h_(h), continuation_(continuation) {}
-  bool await_ready() { return false; }
+  bool await_ready() { return h_.done(); }
   auto await_suspend(std::coroutine_handle<> suspended) {
     continuation_ = suspended;
   }
@@ -50,7 +50,7 @@ template <class T> struct task_awaiter {
   task_awaiter(std::coroutine_handle<> h, std::coroutine_handle<> &continuation,
                T &value)
       : h_(h), continuation_(continuation), value_(value) {}
-  bool await_ready() { return false; }
+  bool await_ready() { return h_.done(); }
   auto await_suspend(std::coroutine_handle<> suspended) {
     continuation_ = suspended;
   }

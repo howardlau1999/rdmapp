@@ -8,6 +8,7 @@
 #include <thread>
 
 #include "rdmapp/acceptor.h"
+#include "rdmapp/detail/debug.h"
 #include "rdmapp/socket/channel.h"
 #include "rdmapp/socket/tcp_connection.h"
 
@@ -29,9 +30,7 @@ rdmapp::task<int> client(std::shared_ptr<rdmapp::pd> pd,
                          std::string const &hostname, uint16_t port) {
   auto connection =
       co_await rdmapp::socket::tcp_connection::connect(loop, hostname, port);
-  auto remote_qp = co_await rdmapp::qp::recv_qp(*connection);
-  auto qp = std::make_shared<rdmapp::qp>(
-      remote_qp.header.lid, remote_qp.header.qp_num, remote_qp.header.sq_psn, pd, cq);
+  auto qp = co_await rdmapp::qp::from_tcp_connection(*connection, pd, cq);
   char buffer[6];
   co_await qp->recv(buffer, sizeof(buffer));
   std::cout << "Received from server: " << buffer << std::endl;

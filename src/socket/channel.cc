@@ -34,13 +34,13 @@ void channel::set_nonblocking() { set_nonblocking(fd_); }
 void channel::writable_callback() {
   writable_callback_();
   writable_callback_ = noop_callback;
-  loop_->deregister(this->shared_from_this());
+  loop_->deregister(*this);
 }
 
 void channel::readable_callback() {
   readable_callback_();
   readable_callback_ = noop_callback;
-  loop_->deregister(this->shared_from_this());
+  loop_->deregister(*this);
 }
 
 void channel::wait_readable() {
@@ -64,7 +64,7 @@ std::shared_ptr<event_loop> channel::loop() {
 }
 
 channel::~channel() {
-  loop_->deregister(this->shared_from_this());
+  loop_->deregister(*this);
   assert(fd_ > 0);
   if (auto rc = ::close(fd_); rc != 0) {
     RDMAPP_LOG_ERROR("failed to close fd %d: %s (errno=%d)", fd_,
