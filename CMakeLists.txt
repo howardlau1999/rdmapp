@@ -1,12 +1,14 @@
 cmake_minimum_required(VERSION 3.1)
 project(rdmapp)
+set(CMAKE_CXX_STANDARD 20)
 
-find_package(Threads)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+find_package(Threads REQUIRED)
+find_package(ibverbs REQUIRED)
+
 if (NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RelWithDebInfo)
 endif()
-
-set(CMAKE_CXX_STANDARD 20)
 
 string(LENGTH "${CMAKE_SOURCE_DIR}/" SOURCE_PATH_LENGTH)
 add_definitions("-DSOURCE_PATH_LENGTH=${SOURCE_PATH_LENGTH}")
@@ -34,7 +36,7 @@ set(RDMAPP_SOURCE_FILES
 )
 
 add_library(rdmapp STATIC ${RDMAPP_SOURCE_FILES})
-target_link_libraries(rdmapp ibverbs)
+target_link_libraries(rdmapp ibverbs Threads::Threads)
 
 if (RDMAPP_BUILD_EXAMPLES)
   add_executable(helloworld examples/helloworld.cc)
