@@ -1,6 +1,7 @@
 #pragma once
 
 #include "acceptor.h"
+#include "connector.h"
 #include "cq.h"
 #include "cq_poller.h"
 #include "device.h"
@@ -9,3 +10,8 @@
 #include "qp.h"
 #include "srq.h"
 #include "task.h"
+#include "acceptor.h"
+#include "socket/channel.h"
+#include "socket/tcp_connection.h"
+#include "socket/event_loop.h"
+#include "socket/tcp_listener.h"

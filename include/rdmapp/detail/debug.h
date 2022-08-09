@@ -1,3 +1,4 @@
+#pragma once
 #include <chrono>
 #include <cstdio>
 #include <ctime>
@@ -16,7 +17,7 @@ enum class LogLevel {
   ERROR,
 };
 
-constexpr LogLevel log_level = LogLevel::DEBUG;
+constexpr static inline LogLevel log_level = LogLevel::DEBUG;
 
 #define RDMAPP_LOG_TRACE(msg, ...)                                             \
   do {                                                                         \

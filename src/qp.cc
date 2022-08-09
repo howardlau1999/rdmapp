@@ -22,7 +22,6 @@
 #include "rdmapp/cq_poller.h"
 #include "rdmapp/detail/debug.h"
 #include "rdmapp/detail/serdes.h"
-#include "rdmapp/detail/socket.h"
 #include "rdmapp/error.h"
 #include "rdmapp/executor.h"
 #include "rdmapp/pd.h"
@@ -31,24 +30,6 @@
 namespace rdmapp {
 
 std::atomic<uint32_t> qp::next_sq_psn = 1;
-
-qp::qp(std::string const &hostname, uint16_t port,
-       std::shared_ptr<rdmapp::pd> pd, std::shared_ptr<cq> cq,
-       std::shared_ptr<srq> srq)
-    : qp(hostname, port, pd, cq, cq, srq) {}
-
-qp::qp(std::string const &hostname, uint16_t port,
-       std::shared_ptr<rdmapp::pd> pd, std::shared_ptr<cq> recv_cq,
-       std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq)
-    : qp(pd, recv_cq, send_cq, srq) {
-  detail::socket::tcp remote(hostname, port);
-  remote.send_qp(*this);
-  auto remote_qp = remote.recv_qp();
-  user_data_ = std::move(remote_qp.user_data);
-  rtr(remote_qp.header.lid, remote_qp.header.qp_num, remote_qp.header.sq_psn);
-  rts();
-}
-
 qp::qp(uint16_t remote_device_id, uint32_t remote_qpn, uint32_t remote_psn,
        std::shared_ptr<pd> pd, std::shared_ptr<cq> cq, std::shared_ptr<srq> srq)
     : qp(remote_device_id, remote_qpn, remote_psn, pd, cq, cq, srq) {}
@@ -58,6 +39,27 @@ qp::qp(uint16_t remote_device_id, uint32_t remote_qpn, uint32_t remote_psn,
     : qp(pd, recv_cq, send_cq, srq) {
   rtr(remote_device_id, remote_qpn, remote_psn);
   rts();
+}
+
+task<std::shared_ptr<qp>>
+qp::from_tcp_connection(socket::tcp_connection &connection,
+                        std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
+                        std::shared_ptr<srq> srq) {
+  return from_tcp_connection(connection, pd, cq, cq, srq);
+}
+
+task<std::shared_ptr<qp>>
+qp::from_tcp_connection(socket::tcp_connection &connection,
+                        std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
+                        std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq) {
+  auto qp_ptr = std::make_shared<qp>(pd, recv_cq, send_cq, srq);
+  co_await qp_ptr->send_qp(connection);
+  auto remote_qp = co_await qp::recv_qp(connection);
+  qp_ptr->rtr(remote_qp.header.lid, remote_qp.header.qp_num,
+              remote_qp.header.sq_psn);
+  qp_ptr->user_data() = std::move(remote_qp.user_data);
+  qp_ptr->rts();
+  co_return qp_ptr;
 }
 
 qp::qp(std::shared_ptr<rdmapp::pd> pd, std::shared_ptr<cq> cq,
@@ -80,7 +82,7 @@ std::vector<uint8_t> qp::serialize() const {
   detail::serialize(qp_->qp_num, it);
   detail::serialize(sq_psn_, it);
   detail::serialize(static_cast<uint32_t>(user_data_.size()), it);
-  std::copy(user_data_.cbegin(), user_data_.cend(), std::back_inserter(buffer));
+  std::copy(user_data_.cbegin(), user_data_.cend(), it);
   return buffer;
 }
 
@@ -101,8 +103,9 @@ void qp::create() {
 
   qp_ = ::ibv_create_qp(pd_->pd_, &qp_init_attr);
   check_ptr(qp_, "failed to create qp");
-  RDMAPP_LOG_DEBUG("created qp %p", qp_);
   sq_psn_ = next_sq_psn.fetch_add(1);
+  RDMAPP_LOG_TRACE("created qp %p lid=%u qpn=%u psn=%u", qp_,
+                   pd_->device_->lid(), qp_->qp_num, sq_psn_);
 }
 
 void qp::init() {
@@ -114,9 +117,9 @@ void qp::init() {
   qp_attr.qp_access_flags = IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ |
                             IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_ATOMIC;
 
-  check_rc(ibv_modify_qp(qp_, &(qp_attr),
-                         IBV_QP_STATE | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS |
-                             IBV_QP_PKEY_INDEX),
+  check_rc(::ibv_modify_qp(qp_, &(qp_attr),
+                           IBV_QP_STATE | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS |
+                               IBV_QP_PKEY_INDEX),
            "failed to transition qp to init state");
 }
 
@@ -157,6 +160,61 @@ void qp::rts() {
                                IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN |
                                IBV_QP_MAX_QP_RD_ATOMIC),
            "failed to transition qp to rts state");
+}
+
+task<deserialized_qp> qp::recv_qp(socket::tcp_connection &connection) {
+  int read = 0;
+  uint8_t header[deserialized_qp::qp_header::kSerializedSize];
+  while (read < deserialized_qp::qp_header::kSerializedSize) {
+    int n = co_await connection.recv(
+        &header[read], deserialized_qp::qp_header::kSerializedSize - read);
+    if (n == 0) {
+      throw_with("remote closed unexpectedly while receiving qp header");
+    }
+    read += n;
+  }
+
+  auto remote_qp = deserialized_qp::deserialize(header);
+  RDMAPP_LOG_TRACE("received header lid=%u qpn=%u psn=%u user_data_size=%u",
+                   remote_qp.header.lid, remote_qp.header.qp_num,
+                   remote_qp.header.sq_psn, remote_qp.header.user_data_size);
+  remote_qp.user_data.resize(remote_qp.header.user_data_size);
+
+  if (remote_qp.header.user_data_size > 0) {
+    size_t user_data_read = 0;
+    remote_qp.user_data.resize(remote_qp.header.user_data_size, 0);
+    while (user_data_read < remote_qp.header.user_data_size) {
+      int n = co_await connection.recv(&remote_qp.user_data[user_data_read],
+                                       remote_qp.header.user_data_size -
+                                           user_data_read);
+      if (n == 0) {
+        throw_with("remote closed unexpectedly while receiving user data");
+      }
+      check_errno(n, "failed to receive user data");
+      user_data_read += n;
+    }
+  }
+  RDMAPP_LOG_TRACE("received user data");
+  co_return remote_qp;
+}
+
+task<void> qp::send_qp(socket::tcp_connection &connection) {
+  auto local_qp_data = serialize();
+  assert(local_qp_data.size() != 0);
+  size_t local_qp_sent = 0;
+  while (local_qp_sent < local_qp_data.size()) {
+    int n = co_await connection.send(&local_qp_data[local_qp_sent],
+                                     local_qp_data.size() - local_qp_sent);
+    if (n == 0) {
+      throw_with("remote closed unexpectedly while sending qp");
+    }
+    check_errno(n, "failed to send qp");
+    local_qp_sent += n;
+  }
+  RDMAPP_LOG_TRACE("sent qp lid=%u qpn=%u psn=%u user_data_size=%lu",
+                   pd_->device_->lid(), qp_->qp_num, sq_psn_,
+                   user_data_.size());
+  co_return;
 }
 
 void qp::post_send(struct ibv_send_wr &send_wr,
@@ -283,7 +341,7 @@ qp::~qp() {
     if (auto rc = ::ibv_destroy_qp(qp_); rc != 0) {
       RDMAPP_LOG_ERROR("failed to destroy qp %p: %s", qp_, strerror(errno));
     } else {
-      RDMAPP_LOG_DEBUG("destroyed qp %p", qp_);
+      RDMAPP_LOG_TRACE("destroyed qp %p", qp_);
     }
   }
 }

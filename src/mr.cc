@@ -15,7 +15,7 @@ mr::~mr() {
   if (auto rc = ::ibv_dereg_mr(mr_); rc != 0) {
     RDMAPP_LOG_ERROR("failed to dereg mr %p addr=%p", mr_, addr);
   } else {
-    RDMAPP_LOG_DEBUG("dereg mr %p addr=%p", mr_, addr);
+    RDMAPP_LOG_TRACE("dereg mr %p addr=%p", mr_, addr);
   }
 }
 

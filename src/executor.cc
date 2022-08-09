@@ -20,7 +20,7 @@ void executor::worker_fn(size_t worker_id) {
       delete cb_ptr;
     }
   } catch (work_queue::queue_closed_error &) {
-    RDMAPP_LOG_DEBUG("executor worker %lu exited", worker_id);
+    RDMAPP_LOG_TRACE("executor worker %lu exited", worker_id);
   }
 }
 

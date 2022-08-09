@@ -14,6 +14,7 @@
 #include "rdmapp/detail/serdes.h"
 #include "rdmapp/device.h"
 #include "rdmapp/pd.h"
+#include "rdmapp/socket/tcp_connection.h"
 #include "rdmapp/srq.h"
 #include "rdmapp/task.h"
 
@@ -87,18 +88,24 @@ public:
     void await_suspend(std::coroutine_handle<> h);
     void await_resume();
   };
-
-  qp(std::string const &hostname, uint16_t port, std::shared_ptr<pd> pd,
-     std::shared_ptr<cq> cq, std::shared_ptr<srq> srq = nullptr);
-  qp(std::string const &hostname, uint16_t port, std::shared_ptr<pd> pd,
-     std::shared_ptr<cq> recv_cq, std::shared_ptr<cq> send_cq,
-     std::shared_ptr<srq> srq = nullptr);
-
+  static task<std::shared_ptr<qp>> from_tcp_connection(socket::tcp_connection &connection,
+                                       std::shared_ptr<pd> pd,
+                                       std::shared_ptr<cq> recv_cq,
+                                       std::shared_ptr<cq> send_cq,
+                                       std::shared_ptr<srq> srq = nullptr);
+  static task<std::shared_ptr<qp>> from_tcp_connection(socket::tcp_connection &connection,
+                                       std::shared_ptr<pd> pd,
+                                       std::shared_ptr<cq> cq,
+                                       std::shared_ptr<srq> srq = nullptr);
   qp(uint16_t remote_device_id, uint32_t remote_qpn, uint32_t remote_psn,
      std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
      std::shared_ptr<srq> srq = nullptr);
   qp(uint16_t remote_device_id, uint32_t remote_qpn, uint32_t remote_psn,
      std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
+     std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq = nullptr);
+  qp(std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
+     std::shared_ptr<srq> srq = nullptr);
+  qp(std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
      std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq = nullptr);
 
   void post_send(struct ibv_send_wr &send_wr, struct ibv_send_wr *&bad_send_wr);
@@ -111,15 +118,13 @@ public:
                       size_t length);
   recv_awaitable recv(void *buffer, size_t length);
 
+  static task<deserialized_qp> recv_qp(socket::tcp_connection &connection);
+  task<void> send_qp(socket::tcp_connection &connection);
   std::vector<uint8_t> serialize() const;
   std::vector<uint8_t> &user_data();
   ~qp();
 
 private:
-  qp(std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
-     std::shared_ptr<srq> srq = nullptr);
-  qp(std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
-     std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq = nullptr);
   void rtr(uint16_t remote_device_id, uint32_t remote_qpn, uint32_t remote_psn);
   void rts();
 };

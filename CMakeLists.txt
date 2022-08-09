@@ -16,13 +16,18 @@ include_directories(include)
 option(RDMAPP_BUILD_EXAMPLES "Build examples" ON)
 
 set(RDMAPP_SOURCE_FILES
-  src/detail/socket.cc
+  src/socket/event_loop.cc
+  src/socket/channel.cc
+  src/detail/io_buf.cc
+  src/socket/tcp_connection.cc
+  src/socket/tcp_listener.cc
   src/device.cc
   src/pd.cc
   src/cq.cc
   src/acceptor.cc
   src/qp.cc
   src/srq.cc
+  src/connector.cc
   src/cq_poller.cc
   src/executor.cc
   src/mr.cc
