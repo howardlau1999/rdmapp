@@ -23,8 +23,7 @@ int main(int argc, char *argv[]) {
 On the server side, create an acceptor to accept QPs:
 
 ```cpp
-rdmapp::task<void> server(rdmapp::acceptor &acceptor) {
-  auto qp = co_await acceptor.accept();
+rdmapp::task<void> handle_qp(std::shared_ptr<rdmapp::qp> qp) {
   char buffer[6] = "hello";
   co_await qp->send(buffer, sizeof(buffer));
   std::cout << "Sent to client: " << buffer << std::endl;
@@ -33,14 +32,20 @@ rdmapp::task<void> server(rdmapp::acceptor &acceptor) {
   co_return;
 }
 
+rdmapp::task<void> server(rdmapp::acceptor &acceptor) {
+  while (true) {
+    auto qp = co_await acceptor.accept();
+    handle_qp(qp).detach();
+  }
+  co_return;
+}
+
 int main() {
   // ...
   rdmapp::acceptor acceptor(pd, cq, loop, 2333);
   auto coro = server(acceptor);
-  while (!coro.h_.done()) {
-    std::this_thread::yield();
-  }
-  if (auto exception = coro.h_.promise().exception_) {
+  coro.get_future().wait();
+  if (auto exception = coro.get_exception()) {
     std::rethrow_exception(exception);
   }
 }
@@ -65,10 +70,8 @@ int main(int argc, char *argv[]) {
   // ...
   rdmapp::connector connector(loop, "127.0.0.1", 2333, pd, cq);
   auto coro = client(connector);
-  while (!coro.h_.done()) {
-    std::this_thread::yield();
-  }
-  if (auto exception = coro.h_.promise().exception_) {
+  coro.get_future().wait();
+  if (auto exception = coro.get_exception()) {
     std::rethrow_exception(exception);
   }
 }

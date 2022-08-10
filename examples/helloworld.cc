@@ -47,15 +47,15 @@ int main(int argc, char *argv[]) {
   if (argc == 2) {
     rdmapp::acceptor acceptor(loop, std::stoi(argv[1]), pd, cq);
     auto coro = server(acceptor);
-    coro.get_future().get();
-    if (auto exception = coro.h_.promise().exception_) {
+    coro.get_future().wait();
+    if (auto exception = coro.get_exception()) {
       std::rethrow_exception(exception);
     }
   } else if (argc == 3) {
     rdmapp::connector connector(loop, argv[1] , std::stoi(argv[2]), pd, cq);
     auto coro = client(connector);
-    coro.get_future().get();
-    if (auto exception = coro.h_.promise().exception_) {
+    coro.get_future().wait();
+    if (auto exception = coro.get_exception()) {
       std::rethrow_exception(exception);
     }
   } else {

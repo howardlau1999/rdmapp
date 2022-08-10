@@ -115,7 +115,8 @@ template <class T> struct task : public noncopyable {
   coroutine_handle_type h_;
   bool detached_;
   operator coroutine_handle_type() const { return h_; }
-  std::shared_future<T> get_future() { return h_.promise().get_future(); }
+  std::shared_future<T> get_future() const { return h_.promise().get_future(); }
+  std::exception_ptr get_exception() const { return h_.promise().exception_; }
   void detach() {
     assert(!detached_);
     auto detached_task = new task<T>(std::move(*this));
@@ -159,7 +160,10 @@ template <> struct task<void> : public noncopyable {
   coroutine_handle_type h_;
   bool detached_;
   operator coroutine_handle_type() const { return h_; }
-  std::shared_future<void> get_future() { return h_.promise().get_future(); }
+  std::shared_future<void> get_future() const {
+    return h_.promise().get_future();
+  }
+  std::exception_ptr get_exception() const { return h_.promise().exception_; }
   void detach() {
     assert(!detached_);
     auto detached_task = new task<void>(std::move(*this));
