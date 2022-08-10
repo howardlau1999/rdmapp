@@ -1,10 +1,12 @@
 #include "rdmapp/mr.h"
 
 #include <cstdint>
+#include <vector>
 
 #include <infiniband/verbs.h>
 
 #include "rdmapp/detail/debug.h"
+#include "rdmapp/detail/serdes.h"
 
 namespace rdmapp {
 
@@ -20,13 +22,22 @@ mr<tags::mr::local>::~mr() {
   }
 }
 
-void *mr<tags::mr::local>::addr() { return mr_->addr; }
+std::vector<uint8_t> mr<tags::mr::local>::serialize() const {
+  std::vector<uint8_t> buffer;
+  auto it = std::back_inserter(buffer);
+  detail::serialize(reinterpret_cast<uint64_t>(mr_->addr), it);
+  detail::serialize(mr_->length, it);
+  detail::serialize(mr_->rkey, it);
+  return buffer;
+}
 
-uint32_t mr<tags::mr::local>::length() { return mr_->length; }
+void *mr<tags::mr::local>::addr() const { return mr_->addr; }
 
-uint32_t mr<tags::mr::local>::rkey() { return mr_->rkey; }
+size_t mr<tags::mr::local>::length() const { return mr_->length; }
 
-uint32_t mr<tags::mr::local>::lkey() { return mr_->lkey; }
+uint32_t mr<tags::mr::local>::rkey() const { return mr_->rkey; }
+
+uint32_t mr<tags::mr::local>::lkey() const { return mr_->lkey; }
 
 mr<tags::mr::remote>::mr(void *addr, uint32_t length, uint32_t rkey)
     : addr_(addr), length_(length), rkey_(rkey) {}

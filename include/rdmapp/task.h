@@ -33,7 +33,7 @@ template <class CoroutineHandle> struct promise_base {
     };
     return awaiter{release_detached_};
   }
-  void unhandled_exception() { exception_ = std::current_exception(); }
+
   std::exception_ptr exception_;
   std::coroutine_handle<> continuation_;
   std::function<void()> release_detached_;
@@ -86,6 +86,10 @@ template <class T> struct task : public noncopyable {
     task<T> get_return_object() {
       return std::coroutine_handle<promise_type>::from_promise(*this);
     }
+    void unhandled_exception() {
+      this->exception_ = std::current_exception();
+      promise_.set_exception(this->exception_);
+    }
     promise_type() : future_(promise_.get_future().share()) {}
     void return_value(T &&value) { promise_.set_value(value); }
     std::shared_future<T> get_future() { return future_; }
@@ -131,6 +135,10 @@ template <> struct task<void> : public noncopyable {
     promise_type() : future_(promise_.get_future().share()) {}
     task<void> get_return_object() {
       return std::coroutine_handle<promise_type>::from_promise(*this);
+    }
+    void unhandled_exception() {
+      this->exception_ = std::current_exception();
+      promise_.set_exception(this->exception_);
     }
     void return_void() { promise_.set_value(); }
     std::shared_future<void> get_future() { return future_; }
