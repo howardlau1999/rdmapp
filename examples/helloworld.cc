@@ -6,17 +6,23 @@
 #include <rdmapp/rdmapp.h>
 #include <string>
 #include <thread>
-#include "rdmapp/connector.h"
 
 using namespace std::literals::chrono_literals;
 
-rdmapp::task<void> server(rdmapp::acceptor &acceptor) {
-  auto qp = co_await acceptor.accept();
+rdmapp::task<void> handle_qp(std::shared_ptr<rdmapp::qp> qp) {
   char buffer[6] = "hello";
   co_await qp->send(buffer, sizeof(buffer));
   std::cout << "Sent to client: " << buffer << std::endl;
   co_await qp->recv(buffer, sizeof(buffer));
   std::cout << "Received from client: " << buffer << std::endl;
+  co_return;
+}
+
+rdmapp::task<void> server(rdmapp::acceptor &acceptor) {
+  while (true) {
+    auto qp = co_await acceptor.accept();
+    handle_qp(qp).detach();
+  }
   co_return;
 }
 
@@ -41,19 +47,15 @@ int main(int argc, char *argv[]) {
   if (argc == 2) {
     rdmapp::acceptor acceptor(loop, std::stoi(argv[1]), pd, cq);
     auto coro = server(acceptor);
-    while (!coro.h_.done()) {
-      std::this_thread::yield();
-    }
-    if (auto exception = coro.h_.promise().exception_) {
+    coro.get_future().wait();
+    if (auto exception = coro.get_exception()) {
       std::rethrow_exception(exception);
     }
   } else if (argc == 3) {
     rdmapp::connector connector(loop, argv[1] , std::stoi(argv[2]), pd, cq);
     auto coro = client(connector);
-    while (!coro.h_.done()) {
-      std::this_thread::yield();
-    }
-    if (auto exception = coro.h_.promise().exception_) {
+    coro.get_future().wait();
+    if (auto exception = coro.get_exception()) {
       std::rethrow_exception(exception);
     }
   } else {
