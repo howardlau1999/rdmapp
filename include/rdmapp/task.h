@@ -63,9 +63,9 @@ template <class T> struct task_awaiter {
   std::coroutine_handle<> h_;
   std::coroutine_handle<> &continuation_;
   std::exception_ptr &exception_;
-  T &value_;
+  std::shared_future<T> value_;
   task_awaiter(std::coroutine_handle<> h, std::coroutine_handle<> &continuation,
-               std::exception_ptr &exception, T &value)
+               std::exception_ptr &exception, std::shared_future<T> value)
       : h_(h), continuation_(continuation), exception_(exception),
         value_(value) {}
   bool await_ready() { return h_.done(); }
@@ -76,7 +76,7 @@ template <class T> struct task_awaiter {
     if (exception_) {
       std::rethrow_exception(exception_);
     }
-    return value_;
+    return value_.get();
   }
 };
 
@@ -86,20 +86,42 @@ template <class T> struct task : public noncopyable {
     task<T> get_return_object() {
       return std::coroutine_handle<promise_type>::from_promise(*this);
     }
-    void return_value(T &&value) { value_ = value; }
-    T value_;
+    promise_type() : future_(promise_.get_future().share()) {}
+    void return_value(T &&value) { promise_.set_value(value); }
+    std::shared_future<T> get_future() { return future_; }
+    void set_detached_task(task<T> *detached) {
+      this->release_detached_ = [detached]() { delete detached; };
+    }
+    std::promise<T> promise_;
+    std::shared_future<T> future_;
   };
   using coroutine_handle_type = std::coroutine_handle<promise_type>;
 
   auto operator co_await() const {
     return task_awaiter<T>(h_, h_.promise().continuation_,
-                           h_.promise().exception_, h_.promise().value_);
+                           h_.promise().exception_, h_.promise().get_future());
   }
-  ~task() { h_.destroy(); }
+  ~task() {
+    if (!detached_) {
+      RDMAPP_LOG_TRACE("waiting coroutine %p", h_.address());
+      get_future().wait();
+      RDMAPP_LOG_TRACE("destroying coroutine %p", h_.address());
+      h_.destroy();
+      RDMAPP_LOG_TRACE("destroyed coroutine %p", h_.address());
+    }
+  }
   task(task &&) = default;
   task(coroutine_handle_type h) : h_(h) {}
   coroutine_handle_type h_;
+  bool detached_;
   operator coroutine_handle_type() const { return h_; }
+  std::shared_future<T> get_future() { return h_.promise().get_future(); }
+  void detach() {
+    assert(!detached_);
+    auto detached_task = new task<T>(std::move(*this));
+    h_.promise().set_detached_task(detached_task);
+    detached_ = true;
+  }
 };
 
 template <> struct task<void> : public noncopyable {
@@ -125,11 +147,11 @@ template <> struct task<void> : public noncopyable {
   }
   ~task() {
     if (!detached_) {
-      RDMAPP_LOG_DEBUG("waiting coroutine %p", h_.address());
+      RDMAPP_LOG_TRACE("waiting coroutine %p", h_.address());
       get_future().wait();
-      RDMAPP_LOG_DEBUG("destroying coroutine %p", h_.address());
+      RDMAPP_LOG_TRACE("destroying coroutine %p", h_.address());
       h_.destroy();
-      RDMAPP_LOG_DEBUG("destroyed coroutine %p", h_.address());
+      RDMAPP_LOG_TRACE("destroyed coroutine %p", h_.address());
     }
   }
   task(task &&) = default;
