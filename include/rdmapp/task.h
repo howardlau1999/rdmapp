@@ -5,6 +5,7 @@
 #include <future>
 
 #include "rdmapp/detail/debug.h"
+#include "rdmapp/detail/noncopyable.h"
 
 namespace rdmapp {
 
@@ -71,7 +72,7 @@ template <class T> struct task_awaiter {
   }
 };
 
-template <class T> struct task {
+template <class T> struct task : public noncopyable {
   struct promise_type
       : public promise_base<std::coroutine_handle<promise_type>> {
     task<T> get_return_object() {
@@ -87,12 +88,13 @@ template <class T> struct task {
                            h_.promise().exception_, h_.promise().value_);
   }
   ~task() { h_.destroy(); }
+  task(task &&) = default;
   task(coroutine_handle_type h) : h_(h) {}
   coroutine_handle_type h_;
   operator coroutine_handle_type() const { return h_; }
 };
 
-template <> struct task<void> {
+template <> struct task<void> : public noncopyable {
   struct promise_type
       : public promise_base<std::coroutine_handle<promise_type>> {
     task<void> get_return_object() {
@@ -108,13 +110,15 @@ template <> struct task<void> {
     return task_awaiter<void>(h_, h_.promise().continuation_,
                               h_.promise().exception_);
   }
-  ~task() { h_.destroy(); }
+  ~task() {
+    get_future().wait();
+    h_.destroy();
+  }
+  task(task &&) = default;
   task(coroutine_handle_type h) : h_(h) {}
   coroutine_handle_type h_;
   operator coroutine_handle_type() const { return h_; }
-  std::future<void> get_future() {
-    return h_.promise().get_future();
-  }
+  std::future<void> get_future() { return h_.promise().get_future(); }
 };
 
 } // namespace rdmapp
