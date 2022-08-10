@@ -3,6 +3,8 @@
 #include <cassert>
 #include <cerrno>
 #include <memory>
+#include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <strings.h>
 #include <sys/epoll.h>
@@ -66,9 +68,18 @@ void event_loop::register_channel(std::shared_ptr<channel> channel,
   assert(epoll_fd_ > 0);
   RDMAPP_LOG_TRACE("epoll add fd=%d events=%s", channel->fd(),
                    events_string(event->events).c_str());
+  {
+    std::lock_guard lock(mutex_);
+    channels_.insert(std::make_pair(channel->fd(), channel));
+  }
   auto rc = ::epoll_ctl(epoll_fd_, EPOLL_CTL_ADD, channel->fd(), event);
-  check_errno(rc, "failed to add fd to epoll");
-  channels_.insert(std::make_pair(channel->fd(), channel));
+  try {
+    check_errno(rc, "failed to add fd to epoll");
+  } catch (...) {
+    std::lock_guard lock(mutex_);
+    channels_.erase(channel->fd());
+    throw;
+  }
 }
 
 void event_loop::register_read(std::shared_ptr<channel> channel) {
@@ -89,10 +100,13 @@ void event_loop::deregister(socket::channel &channel) {
   assert(epoll_fd_ > 0);
   struct epoll_event event;
   ::bzero(&event, sizeof(event));
-  channels_.erase(channel.fd());
   auto rc = ::epoll_ctl(epoll_fd_, EPOLL_CTL_DEL, channel.fd(), &event);
   if (rc < 0 && errno != ENOENT) {
     check_errno(rc, "failed to remove fd from epoll");
+  }
+  {
+    std::lock_guard lock(mutex_);
+    channels_.erase(channel.fd());
   }
 }
 
@@ -114,23 +128,29 @@ void event_loop::loop() {
         close_triggered = true;
         continue;
       }
-      auto it = channels_.find(fd);
-      assert(it != channels_.end());
-      auto channel = it->second.lock();
+      auto channel = [&]() {
+        std::shared_lock lock(mutex_);
+        auto it = channels_.find(fd);
+        assert(it != channels_.end());
+        return it->second.lock();
+      }();
       if (channel) {
         if (event.events & EPOLLIN || event.events & EPOLLERR) {
           channel->readable_callback();
           if (event.events & EPOLLERR) {
+            std::lock_guard lock(mutex_);
             channels_.erase(fd);
           }
         }
         if (event.events & EPOLLOUT || event.events & EPOLLERR) {
           channel->writable_callback();
           if (event.events & EPOLLERR) {
+            std::lock_guard lock(mutex_);
             channels_.erase(fd);
           }
         }
       } else {
+        std::lock_guard lock(mutex_);
         channels_.erase(fd);
       }
     }
@@ -144,7 +164,6 @@ void event_loop::close() {
 }
 
 event_loop::~event_loop() {
-  channels_.clear();
   if (close_event_fd_ > 0) {
     if (auto rc = ::close(close_event_fd_); rc != 0) {
       RDMAPP_LOG_ERROR("failed to close event fd %d: %s (errno=%d)",

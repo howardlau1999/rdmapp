@@ -9,13 +9,20 @@
 
 using namespace std::literals::chrono_literals;
 
-rdmapp::task<void> server(rdmapp::acceptor &acceptor) {
-  auto qp = co_await acceptor.accept();
+rdmapp::task<void> handle_qp(std::shared_ptr<rdmapp::qp> qp) {
   char buffer[6] = "hello";
   co_await qp->send(buffer, sizeof(buffer));
   std::cout << "Sent to client: " << buffer << std::endl;
   co_await qp->recv(buffer, sizeof(buffer));
   std::cout << "Received from client: " << buffer << std::endl;
+  co_return;
+}
+
+rdmapp::task<void> server(rdmapp::acceptor &acceptor) {
+  while (true) {
+    auto qp = co_await acceptor.accept();
+    handle_qp(qp).detach();
+  }
   co_return;
 }
 
