@@ -2,6 +2,7 @@
 
 #include <coroutine>
 #include <exception>
+#include <future>
 
 #include "rdmapp/detail/debug.h"
 
@@ -97,7 +98,9 @@ template <> struct task<void> {
     task<void> get_return_object() {
       return std::coroutine_handle<promise_type>::from_promise(*this);
     }
-    void return_void() {}
+    void return_void() { promise_.set_value(); }
+    std::future<void> get_future() { return promise_.get_future(); }
+    std::promise<void> promise_;
   };
   using coroutine_handle_type = std::coroutine_handle<promise_type>;
 
@@ -109,6 +112,9 @@ template <> struct task<void> {
   task(coroutine_handle_type h) : h_(h) {}
   coroutine_handle_type h_;
   operator coroutine_handle_type() const { return h_; }
+  std::future<void> get_future() {
+    return h_.promise().get_future();
+  }
 };
 
 } // namespace rdmapp

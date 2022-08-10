@@ -6,7 +6,6 @@
 #include <rdmapp/rdmapp.h>
 #include <string>
 #include <thread>
-#include "rdmapp/connector.h"
 
 using namespace std::literals::chrono_literals;
 
@@ -41,18 +40,14 @@ int main(int argc, char *argv[]) {
   if (argc == 2) {
     rdmapp::acceptor acceptor(loop, std::stoi(argv[1]), pd, cq);
     auto coro = server(acceptor);
-    while (!coro.h_.done()) {
-      std::this_thread::yield();
-    }
+    coro.get_future().get();
     if (auto exception = coro.h_.promise().exception_) {
       std::rethrow_exception(exception);
     }
   } else if (argc == 3) {
     rdmapp::connector connector(loop, argv[1] , std::stoi(argv[2]), pd, cq);
     auto coro = client(connector);
-    while (!coro.h_.done()) {
-      std::this_thread::yield();
-    }
+    coro.get_future().get();
     if (auto exception = coro.h_.promise().exception_) {
       std::rethrow_exception(exception);
     }
