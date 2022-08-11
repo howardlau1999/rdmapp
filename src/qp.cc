@@ -99,6 +99,8 @@ void qp::create() {
   qp_init_attr.cap.max_recv_wr = 128;
   qp_init_attr.cap.max_send_wr = 128;
   qp_init_attr.sq_sig_all = 0;
+  qp_init_attr.qp_context = this;
+
   if (srq_ != nullptr) {
     qp_init_attr.srq = srq_->srq_;
   }
@@ -117,7 +119,8 @@ void qp::init() {
   qp_attr.pkey_index = 0;
   qp_attr.port_num = pd_->device_->port_num();
   qp_attr.qp_access_flags = IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ |
-                            IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_ATOMIC;
+                            IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_ATOMIC |
+                            IBV_ACCESS_RELAXED_ORDERING;
 
   check_rc(::ibv_modify_qp(qp_, &(qp_attr),
                            IBV_QP_STATE | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS |
