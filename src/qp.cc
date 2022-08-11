@@ -152,8 +152,8 @@ void qp::rts() {
   ::bzero(&qp_attr, sizeof(qp_attr));
   qp_attr.qp_state = IBV_QPS_RTS;
   qp_attr.timeout = 14;
-  qp_attr.retry_cnt = 7;
-  qp_attr.rnr_retry = 7;
+  qp_attr.retry_cnt = 1;
+  qp_attr.rnr_retry = 1;
   qp_attr.max_rd_atomic = 1;
   qp_attr.sq_psn = sq_psn_;
 
@@ -221,6 +221,9 @@ task<void> qp::send_qp(socket::tcp_connection &connection) {
 
 void qp::post_send(struct ibv_send_wr &send_wr,
                    struct ibv_send_wr *&bad_send_wr) {
+  RDMAPP_LOG_TRACE("post send wr_id=%p addr=%p",
+                   reinterpret_cast<void *>(send_wr.wr_id),
+                   reinterpret_cast<void *>(send_wr.sg_list->addr));
   check_rc(::ibv_post_send(qp_, &send_wr, &bad_send_wr), "failed to post send");
 }
 
@@ -230,6 +233,9 @@ void qp::post_recv(struct ibv_recv_wr &recv_wr,
     check_rc(::ibv_post_srq_recv(srq_->srq_, &recv_wr, &bad_recv_wr),
              "failed to post srq recv");
   } else {
+    RDMAPP_LOG_TRACE("post recv wr_id=%p addr=%p",
+                     reinterpret_cast<void *>(recv_wr.wr_id),
+                     reinterpret_cast<void *>(recv_wr.sg_list->addr));
     check_rc(::ibv_post_recv(qp_, &recv_wr, &bad_recv_wr),
              "failed to post recv");
   }
