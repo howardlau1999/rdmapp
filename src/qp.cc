@@ -154,8 +154,8 @@ void qp::rts() {
   ::bzero(&qp_attr, sizeof(qp_attr));
   qp_attr.qp_state = IBV_QPS_RTS;
   qp_attr.timeout = 14;
-  qp_attr.retry_cnt = 7;
-  qp_attr.rnr_retry = 7;
+  qp_attr.retry_cnt = 1;
+  qp_attr.rnr_retry = 1;
   qp_attr.max_rd_atomic = 1;
   qp_attr.sq_psn = sq_psn_;
 
