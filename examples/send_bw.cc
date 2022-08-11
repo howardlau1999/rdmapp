@@ -9,10 +9,6 @@
 #include <string>
 #include <thread>
 
-#include "rdmapp/executor.h"
-#include "rdmapp/mr.h"
-#include "rdmapp/qp.h"
-
 using namespace std::literals::chrono_literals;
 
 constexpr size_t kBufferSize = 2 * 1024 * 1024; // 2 MB
