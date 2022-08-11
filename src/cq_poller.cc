@@ -10,23 +10,25 @@
 
 namespace rdmapp {
 
-cq_poller::cq_poller(std::shared_ptr<cq> cq)
-    : cq_poller(cq, std::make_shared<executor>()) {}
+cq_poller::cq_poller(std::shared_ptr<cq> cq, size_t batch_size)
+    : cq_poller(cq, std::make_shared<executor>(), batch_size) {}
 
-cq_poller::cq_poller(std::shared_ptr<cq> cq, std::shared_ptr<executor> executor)
-    : cq_(cq), stopped_(false), executor_(executor),
-      worker_thread_(&cq_poller::worker, this) {}
+cq_poller::cq_poller(std::shared_ptr<cq> cq, std::shared_ptr<executor> executor,
+                     size_t batch_size)
+    : cq_(cq), stopped_(false), executor_(executor), wc_vec_(batch_size),
+      poller_thread_(&cq_poller::worker, this) {}
 
 cq_poller::~cq_poller() {
   stopped_ = true;
-  worker_thread_.join();
+  poller_thread_.join();
 }
 
 void cq_poller::worker() {
-  struct ibv_wc wc;
   while (!stopped_) {
     try {
-      if (cq_->poll(wc)) {
+      auto nr_wc = cq_->poll(wc_vec_);
+      for (size_t i = 0; i < nr_wc; ++i) {
+        auto &wc = wc_vec_[i];
         RDMAPP_LOG_TRACE("polled cqe wr_id=%p status=%d",
                          reinterpret_cast<void *>(wc.wr_id), wc.status);
         executor_->process_wc(wc);

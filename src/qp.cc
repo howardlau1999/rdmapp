@@ -119,8 +119,7 @@ void qp::init() {
   qp_attr.pkey_index = 0;
   qp_attr.port_num = pd_->device_->port_num();
   qp_attr.qp_access_flags = IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ |
-                            IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_ATOMIC |
-                            IBV_ACCESS_RELAXED_ORDERING;
+                            IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_ATOMIC;
 
   check_rc(::ibv_modify_qp(qp_, &(qp_attr),
                            IBV_QP_STATE | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS |
@@ -155,8 +154,8 @@ void qp::rts() {
   ::bzero(&qp_attr, sizeof(qp_attr));
   qp_attr.qp_state = IBV_QPS_RTS;
   qp_attr.timeout = 14;
-  qp_attr.retry_cnt = 1;
-  qp_attr.rnr_retry = 1;
+  qp_attr.retry_cnt = 7;
+  qp_attr.rnr_retry = 7;
   qp_attr.max_rd_atomic = 1;
   qp_attr.sq_psn = sq_psn_;
 
