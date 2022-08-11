@@ -4,10 +4,12 @@
 #include <exception>
 #include <iostream>
 #include <memory>
+#include <ratio>
 #include <rdmapp/rdmapp.h>
 #include <string>
 #include <thread>
 
+#include "rdmapp/executor.h"
 #include "rdmapp/mr.h"
 #include "rdmapp/qp.h"
 
@@ -15,62 +17,65 @@ using namespace std::literals::chrono_literals;
 
 rdmapp::task<void> server_worker(std::shared_ptr<rdmapp::qp> qp) {
   std::vector<uint8_t> buffer;
+  buffer.resize(2 * 1024 * 1024);
   std::shared_ptr<rdmapp::local_mr> local_mr =
       qp->pd_ptr()->reg_mr(&buffer[0], buffer.size());
-  buffer.resize(4 * 1024);
-  for (size_t i = 0; i < 4 * 1024 * 1024; ++i) {
+  for (size_t i = 0; i < 8 * 1024; ++i) {
     co_await qp->send(local_mr);
+    if (i % 1024 == 0) {
+      std::cout << i << std::endl;
+    }
   }
   co_return;
 }
 
-rdmapp::task<void> handle_qp(std::shared_ptr<rdmapp::qp> qp) {
-  auto tik = std::chrono::high_resolution_clock::now();
+rdmapp::task<void> server(rdmapp::acceptor &acceptor) {
+  auto qp = co_await acceptor.accept();
   std::vector<std::shared_future<void>> futures;
-  auto tok = std::chrono::high_resolution_clock::now();
+  auto tik = std::chrono::high_resolution_clock::now();
   for (size_t i = 0; i < 4; ++i) {
     auto task = server_worker(qp);
     futures.emplace_back(task.get_future());
     task.detach();
   }
   for (auto &fut : futures) {
-    fut.wait();
+    fut.get();
   }
-  std::cout << (tok - tik).count() << std::endl;
-  co_return;
-}
-
-rdmapp::task<void> server(rdmapp::acceptor &acceptor) {
-  auto qp = co_await acceptor.accept();
-  co_await handle_qp(qp);
+  auto tok = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> seconds = tok - tik;
+  std::cout << seconds.count() << "s" << std::endl;
   co_return;
 }
 
 rdmapp::task<void> client_worker(std::shared_ptr<rdmapp::qp> qp) {
   std::vector<uint8_t> buffer;
-  buffer.resize(4 * 1024);
+  buffer.resize(2 * 1024 * 1024);
   std::shared_ptr<rdmapp::local_mr> local_mr =
       qp->pd_ptr()->reg_mr(&buffer[0], buffer.size());
-  for (size_t i = 0; i < 1024 * 1024; ++i) {
+  for (size_t i = 0; i < 8 * 1024; ++i) {
     co_await qp->recv(local_mr);
+    if (i % 1024 == 0) {
+      std::cout << i << std::endl;
+    }
   }
   co_return;
 }
 
 rdmapp::task<void> client(rdmapp::connector &connector) {
   auto qp = co_await connector.connect();
-  auto tik = std::chrono::high_resolution_clock::now();
   std::vector<std::shared_future<void>> futures;
-  for (size_t i = 0; i < 16; ++i) {
+  for (size_t i = 0; i < 4; ++i) {
     auto task = client_worker(qp);
     futures.emplace_back(task.get_future());
     task.detach();
   }
+  auto tik = std::chrono::high_resolution_clock::now();
   for (auto &fut : futures) {
-    fut.wait();
+    fut.get();
   }
   auto tok = std::chrono::high_resolution_clock::now();
-  std::cout << (tok - tik).count() << std::endl;
+  std::chrono::duration<double> seconds = tok - tik;
+  std::cout << seconds.count() << "s" << std::endl;
   co_return;
 }
 

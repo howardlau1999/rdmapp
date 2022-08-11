@@ -13,7 +13,7 @@
 namespace rdmapp {
 
 cq::cq(std::shared_ptr<device> device) : device_(device) {
-  cq_ = ::ibv_create_cq(device->ctx_, 1, this, nullptr, 0);
+  cq_ = ::ibv_create_cq(device->ctx_, 128, this, nullptr, 0);
   check_ptr(cq_, "failed to create cq");
   RDMAPP_LOG_TRACE("created cq: %p", cq_);
 }
