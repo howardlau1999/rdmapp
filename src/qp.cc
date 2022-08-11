@@ -99,6 +99,8 @@ void qp::create() {
   qp_init_attr.cap.max_recv_wr = 128;
   qp_init_attr.cap.max_send_wr = 128;
   qp_init_attr.sq_sig_all = 0;
+  qp_init_attr.qp_context = this;
+
   if (srq_ != nullptr) {
     qp_init_attr.srq = srq_->srq_;
   }

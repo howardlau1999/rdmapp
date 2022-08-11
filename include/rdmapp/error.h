@@ -1,3 +1,4 @@
+#pragma once
 #include <cerrno>
 #include <cstddef>
 #include <cstdio>
@@ -26,6 +27,7 @@ static inline void check_rc(int rc, const char *message) {
     throw_with("%s: %s (rc=%d)", message, strerror(rc), rc);
   }
 }
+
 static inline void check_wc_status(enum ibv_wc_status status,
                                    const char *message) {
   if (status != IBV_WC_SUCCESS) {
