@@ -45,8 +45,11 @@ if (iwyu_path)
 endif()
 
 if (RDMAPP_BUILD_EXAMPLES)
-  add_executable(helloworld examples/helloworld.cc)
-  target_link_libraries(helloworld rdmapp)
+  set(RDMAPP_EXAMPLES helloworld send_bw)
+  foreach(EXAMPLE IN LISTS RDMAPP_EXAMPLES)
+    add_executable(${EXAMPLE} examples/${EXAMPLE}.cc)
+    target_link_libraries(${EXAMPLE} rdmapp) 
+  endforeach()
 endif()
 
 include(GNUInstallDirs)
