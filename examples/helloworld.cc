@@ -20,8 +20,8 @@ rdmapp::task<void> handle_qp(std::shared_ptr<rdmapp::qp> qp) {
 
   /* Read/Write */
   std::copy_n("hello", sizeof(buffer), buffer);
-  auto local_mr = std::shared_ptr<rdmapp::local_mr>(
-      qp->pd_ptr()->reg_mr(buffer, sizeof(buffer)));
+  auto local_mr = std::make_shared<rdmapp::local_mr>(
+      std::move(qp->pd_ptr()->reg_mr(&buffer[0], sizeof(buffer))));
   auto local_mr_serialized = local_mr->serialize();
   co_await qp->send(local_mr_serialized.data(), local_mr_serialized.size());
   std::cout << "Sent mr addr=" << local_mr->addr()
@@ -29,7 +29,8 @@ rdmapp::task<void> handle_qp(std::shared_ptr<rdmapp::qp> qp) {
             << " to client" << std::endl;
   auto imm = co_await qp->recv(local_mr);
   assert(imm.has_value());
-  std::cout << "Written by client (imm=" << imm.value() << "): " << buffer << std::endl;
+  std::cout << "Written by client (imm=" << imm.value() << "): " << buffer
+            << std::endl;
 
   co_return;
 }

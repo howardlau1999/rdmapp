@@ -20,8 +20,8 @@ constexpr size_t kTotalSize = kBufferSize * kSendCount * kWorkerCount;
 rdmapp::task<void> server_worker(size_t id, std::shared_ptr<rdmapp::qp> qp) {
   std::vector<uint8_t> buffer;
   buffer.resize(kBufferSize);
-  std::shared_ptr<rdmapp::local_mr> local_mr =
-      qp->pd_ptr()->reg_mr(&buffer[0], buffer.size());
+  auto local_mr = std::make_shared<rdmapp::local_mr>(
+      std::move(qp->pd_ptr()->reg_mr(&buffer[0], buffer.size())));
   std::cout << "Worker " << id << " started" << std::endl;
   for (size_t i = 0; i < kSendCount; ++i) {
     co_await qp->send(local_mr);
@@ -58,8 +58,8 @@ rdmapp::task<void> server(rdmapp::acceptor &acceptor) {
 rdmapp::task<void> client_worker(size_t id, std::shared_ptr<rdmapp::qp> qp) {
   std::vector<uint8_t> buffer;
   buffer.resize(kBufferSize);
-  std::shared_ptr<rdmapp::local_mr> local_mr =
-      qp->pd_ptr()->reg_mr(&buffer[0], buffer.size());
+   auto local_mr = std::make_shared<rdmapp::local_mr>(
+      std::move(qp->pd_ptr()->reg_mr(&buffer[0], buffer.size())));
   std::cout << "Worker " << id << " started" << std::endl;
   for (size_t i = 0; i < kSendCount; ++i) {
     co_await qp->recv(local_mr);
@@ -86,7 +86,7 @@ rdmapp::task<void> client(rdmapp::connector &connector) {
   }
   auto tok = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> seconds = tok - tik;
-    double mb = static_cast<double>(kTotalSize) / 1024 / 1024;
+  double mb = static_cast<double>(kTotalSize) / 1024 / 1024;
   double throughput = mb / seconds.count();
   std::cout << "Total: " << mb << " MB, Elapsed: " << seconds.count()
             << "s, Throughput: " << throughput << "MB/s" << std::endl;

@@ -13,6 +13,19 @@ namespace rdmapp {
 mr<tags::mr::local>::mr(std::shared_ptr<pd> pd, struct ibv_mr *mr)
     : pd_(pd), mr_(mr) {}
 
+mr<tags::mr::local>::mr(mr<tags::mr::local> &&other)
+    : mr_(other.mr_), pd_(std::move(other.pd_)) {
+  other.mr_ = nullptr;
+}
+
+mr<tags::mr::local> &
+mr<tags::mr::local>::operator=(mr<tags::mr::local> &&other) {
+  mr_ = other.mr_;
+  pd_ = std::move(other.pd_);
+  other.mr_ = nullptr;
+  return *this;
+}
+
 mr<tags::mr::local>::~mr() {
   auto addr = mr_->addr;
   if (auto rc = ::ibv_dereg_mr(mr_); rc != 0) {

@@ -6,6 +6,7 @@
 
 #include <infiniband/verbs.h>
 
+#include "rdmapp/detail/noncopyable.h"
 #include "rdmapp/detail/serdes.h"
 
 namespace rdmapp {
@@ -21,12 +22,14 @@ class pd;
 
 template <class Tag> class mr;
 
-template <> class mr<tags::mr::local> {
+template <> class mr<tags::mr::local> : public noncopyable {
   struct ibv_mr *mr_;
   std::shared_ptr<pd> pd_;
 
 public:
   mr(std::shared_ptr<pd> pd, struct ibv_mr *mr);
+  mr(mr<tags::mr::local> &&other);
+  mr<tags::mr::local> &operator=(mr<tags::mr::local> &&other);
   ~mr();
   std::vector<uint8_t> serialize() const;
   void *addr() const;
