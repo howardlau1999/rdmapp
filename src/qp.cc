@@ -323,28 +323,21 @@ void qp::send_awaitable::await_suspend(std::coroutine_handle<> h) {
   send_wr.wr_id = reinterpret_cast<uint64_t>(callback);
   send_wr.send_flags = IBV_SEND_SIGNALED;
   send_wr.sg_list = &send_sge;
-  if (opcode_ == IBV_WR_RDMA_READ || opcode_ == IBV_WR_RDMA_WRITE ||
-      opcode_ == IBV_WR_RDMA_WRITE_WITH_IMM ||
-      opcode_ == IBV_WR_ATOMIC_FETCH_AND_ADD ||
-      opcode_ == IBV_WR_ATOMIC_CMP_AND_SWP) {
+  if (is_rdma()) {
     assert(remote_mr_.addr() != nullptr);
-    if (opcode_ == IBV_WR_RDMA_READ) {
-      assert(local_mr_->length() >= remote_mr_.length());
-    }
-    if (opcode_ == IBV_WR_RDMA_WRITE || opcode_ == IBV_WR_RDMA_WRITE_WITH_IMM) {
-      assert(local_mr_->length() <= remote_mr_.length());
-    }
     send_wr.wr.rdma.remote_addr = reinterpret_cast<uint64_t>(remote_mr_.addr());
     send_wr.wr.rdma.rkey = remote_mr_.rkey();
     if (opcode_ == IBV_WR_RDMA_WRITE_WITH_IMM) {
       send_wr.imm_data = imm_;
     }
-    if (opcode_ == IBV_WR_ATOMIC_CMP_AND_SWP ||
-        opcode_ == IBV_WR_ATOMIC_FETCH_AND_ADD) {
-      send_wr.wr.atomic.compare_add = compare_add_;
-      if (opcode_ == IBV_WR_ATOMIC_CMP_AND_SWP) {
-        send_wr.wr.atomic.swap = swap_;
-      }
+  } else if (is_atomic()) {
+    assert(remote_mr_.addr() != nullptr);
+    send_wr.wr.atomic.remote_addr =
+        reinterpret_cast<uint64_t>(remote_mr_.addr());
+    send_wr.wr.atomic.rkey = remote_mr_.rkey();
+    send_wr.wr.atomic.compare_add = compare_add_;
+    if (opcode_ == IBV_WR_ATOMIC_CMP_AND_SWP) {
+      send_wr.wr.atomic.swap = swap_;
     }
   }
 
@@ -354,6 +347,16 @@ void qp::send_awaitable::await_suspend(std::coroutine_handle<> h) {
     delete callback;
     throw;
   }
+}
+
+bool qp::send_awaitable::is_rdma() {
+  return opcode_ == IBV_WR_RDMA_READ || opcode_ == IBV_WR_RDMA_WRITE ||
+         opcode_ == IBV_WR_RDMA_WRITE_WITH_IMM;
+}
+
+bool qp::send_awaitable::is_atomic() {
+  return opcode_ == IBV_WR_ATOMIC_CMP_AND_SWP ||
+         opcode_ == IBV_WR_ATOMIC_FETCH_AND_ADD;
 }
 
 void qp::send_awaitable::await_resume() {
