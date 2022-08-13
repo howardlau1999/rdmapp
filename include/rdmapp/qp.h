@@ -24,10 +24,11 @@ namespace rdmapp {
 struct deserialized_qp {
   struct qp_header {
     static constexpr size_t kSerializedSize =
-        sizeof(uint16_t) + 3 * sizeof(uint32_t);
+        sizeof(uint16_t) + 3 * sizeof(uint32_t) + sizeof(union ibv_gid);
     uint16_t lid;
     uint32_t qp_num;
     uint32_t sq_psn;
+    union ibv_gid gid;
     uint32_t user_data_size;
   } header;
   template <class It> static deserialized_qp deserialize(It it) {
@@ -35,6 +36,7 @@ struct deserialized_qp {
     detail::deserialize(it, des_qp.header.lid);
     detail::deserialize(it, des_qp.header.qp_num);
     detail::deserialize(it, des_qp.header.sq_psn);
+    detail::deserialize(it, des_qp.header.gid);
     detail::deserialize(it, des_qp.header.user_data_size);
     return des_qp;
   }
@@ -130,10 +132,10 @@ public:
                       std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
                       std::shared_ptr<srq> srq = nullptr);
   qp(uint16_t remote_device_id, uint32_t remote_qpn, uint32_t remote_psn,
-     std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
+     union ibv_gid gid, std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
      std::shared_ptr<srq> srq = nullptr);
   qp(uint16_t remote_device_id, uint32_t remote_qpn, uint32_t remote_psn,
-     std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
+     union ibv_gid gid, std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
      std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq = nullptr);
   qp(std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
      std::shared_ptr<srq> srq = nullptr);
@@ -264,7 +266,8 @@ public:
   ~qp();
 
 private:
-  void rtr(uint16_t remote_device_id, uint32_t remote_qpn, uint32_t remote_psn);
+  void rtr(uint16_t remote_device_id, uint32_t remote_qpn, uint32_t remote_psn,
+           union ibv_gid gid);
   void rts();
 };
 

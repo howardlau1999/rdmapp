@@ -54,9 +54,9 @@ task<std::shared_ptr<qp>> acceptor::accept() {
   auto channel = co_await listener_->accept();
   auto connection = socket::tcp_connection(channel);
   auto remote_qp = co_await qp::recv_qp(connection);
-  auto local_qp =
-      std::make_shared<qp>(remote_qp.header.lid, remote_qp.header.qp_num,
-                           remote_qp.header.sq_psn, pd_, send_cq_, recv_cq_);
+  auto local_qp = std::make_shared<qp>(
+      remote_qp.header.lid, remote_qp.header.qp_num, remote_qp.header.sq_psn,
+      remote_qp.header.gid, pd_, send_cq_, recv_cq_);
   local_qp->user_data() = std::move(remote_qp.user_data);
   co_await local_qp->send_qp(connection);
   co_return local_qp;

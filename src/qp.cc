@@ -30,14 +30,16 @@
 namespace rdmapp {
 
 std::atomic<uint32_t> qp::next_sq_psn = 1;
+
 qp::qp(uint16_t remote_device_id, uint32_t remote_qpn, uint32_t remote_psn,
-       std::shared_ptr<pd> pd, std::shared_ptr<cq> cq, std::shared_ptr<srq> srq)
-    : qp(remote_device_id, remote_qpn, remote_psn, pd, cq, cq, srq) {}
+       union ibv_gid gid, std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
+       std::shared_ptr<srq> srq)
+    : qp(remote_device_id, remote_qpn, remote_psn, gid, pd, cq, cq, srq) {}
 qp::qp(uint16_t remote_device_id, uint32_t remote_qpn, uint32_t remote_psn,
-       std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
+       union ibv_gid gid, std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
        std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq)
     : qp(pd, recv_cq, send_cq, srq) {
-  rtr(remote_device_id, remote_qpn, remote_psn);
+  rtr(remote_device_id, remote_qpn, remote_psn, gid);
   rts();
 }
 
@@ -56,7 +58,7 @@ qp::from_tcp_connection(socket::tcp_connection &connection,
   co_await qp_ptr->send_qp(connection);
   auto remote_qp = co_await qp::recv_qp(connection);
   qp_ptr->rtr(remote_qp.header.lid, remote_qp.header.qp_num,
-              remote_qp.header.sq_psn);
+              remote_qp.header.sq_psn, remote_qp.header.gid);
   qp_ptr->user_data() = std::move(remote_qp.user_data);
   qp_ptr->rts();
   co_return qp_ptr;
@@ -83,6 +85,7 @@ std::vector<uint8_t> qp::serialize() const {
   detail::serialize(pd_->device_ptr()->lid(), it);
   detail::serialize(qp_->qp_num, it);
   detail::serialize(sq_psn_, it);
+  detail::serialize(pd_->device_ptr()->gid(), it);
   detail::serialize(static_cast<uint32_t>(user_data_.size()), it);
   std::copy(user_data_.cbegin(), user_data_.cend(), it);
   return buffer;
@@ -127,20 +130,24 @@ void qp::init() {
            "failed to transition qp to init state");
 }
 
-void qp::rtr(uint16_t remote_lid, uint32_t remote_qpn, uint32_t remote_psn) {
+void qp::rtr(uint16_t remote_lid, uint32_t remote_qpn, uint32_t remote_psn,
+             union ibv_gid gid) {
   struct ibv_qp_attr qp_attr = {};
   ::bzero(&qp_attr, sizeof(qp_attr));
   qp_attr.qp_state = IBV_QPS_RTR;
   qp_attr.path_mtu = IBV_MTU_4096;
   qp_attr.dest_qp_num = remote_qpn;
   qp_attr.rq_psn = remote_psn;
-  qp_attr.max_dest_rd_atomic = 1;
+  qp_attr.max_dest_rd_atomic = 16;
   qp_attr.min_rnr_timer = 12;
-  qp_attr.ah_attr.is_global = 0;
+  qp_attr.ah_attr.is_global = 1;
   qp_attr.ah_attr.dlid = remote_lid;
   qp_attr.ah_attr.sl = 0;
   qp_attr.ah_attr.src_path_bits = 0;
   qp_attr.ah_attr.port_num = pd_->device_ptr()->port_num();
+  qp_attr.ah_attr.grh.hop_limit = 1;
+  qp_attr.ah_attr.grh.dgid = gid;
+  qp_attr.ah_attr.grh.sgid_index = pd_->device_ptr()->gid_num_;
   check_rc(::ibv_modify_qp(qp_, &qp_attr,
                            IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU |
                                IBV_QP_DEST_QPN | IBV_QP_RQ_PSN |
@@ -156,7 +163,7 @@ void qp::rts() {
   qp_attr.timeout = 14;
   qp_attr.retry_cnt = 1;
   qp_attr.rnr_retry = 1;
-  qp_attr.max_rd_atomic = 1;
+  qp_attr.max_rd_atomic = 16;
   qp_attr.sq_psn = sq_psn_;
 
   check_rc(::ibv_modify_qp(qp_, &qp_attr,

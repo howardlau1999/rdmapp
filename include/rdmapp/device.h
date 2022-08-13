@@ -41,25 +41,26 @@ class device : public noncopyable {
   struct ibv_device *device_;
   struct ibv_context *ctx_;
   struct ibv_port_attr port_attr_;
-  struct ibv_device_attr attr_;
-  struct ibv_device_attr_ex attr_ex_;
+  union ibv_gid gid_;
+  struct ibv_device_attr_ex device_attr_ex_;
 
-  uint16_t port_num_;
+  uint32_t port_num_;
+  uint32_t gid_num_;
   friend class pd;
   friend class cq;
   friend class qp;
   friend class srq;
-  void open_device(struct ibv_device *target, uint16_t port_num);
+  void open_device(struct ibv_device *target, uint32_t port_num, uint32_t gid_num = 0);
 
 public:
-  device(struct ibv_device *target, uint16_t port_num = 1);
-  device(std::string const &device_name, uint16_t port_num = 1);
-  device(uint16_t device_num = 0, uint16_t port_num = 1);
-  uint16_t port_num();
+  device(struct ibv_device *target, uint32_t port_num = 1, uint32_t gid_num = 0);
+  device(std::string const &device_name, uint32_t port_num = 1, uint32_t gid_num = 0);
+  device(uint16_t device_num = 0, uint32_t port_num = 1, uint32_t gid_num = 0);
+  uint32_t port_num();
   uint16_t lid();
+  union ibv_gid gid();
   bool is_fetch_and_add_supported();
   bool is_compare_and_swap_supported();
-  bool is_swap_supported();
   ~device();
 };
 

@@ -69,19 +69,19 @@ struct ibv_device *device_list::at(size_t i) {
   return devices_[i];
 }
 
-void device::open_device(struct ibv_device *target, uint16_t port_num) {
+void device::open_device(struct ibv_device *target, uint32_t port_num,
+                         uint32_t gid_num) {
   device_ = target;
   port_num_ = port_num;
   ctx_ = ::ibv_open_device(device_);
   check_ptr(ctx_, "failed to open device");
   check_rc(::ibv_query_port(ctx_, port_num_, &port_attr_),
            "failed to query port");
-  check_rc(::ibv_query_device(ctx_, &attr_),
-           "failed to query device attributes");
+  check_rc(::ibv_query_gid(ctx_, port_num, gid_num, &gid_),
+           "failed to query gid");
   struct ibv_query_device_ex_input query = {};
-  check_rc(::ibv_query_device_ex(ctx_, &query, &attr_ex_),
+  check_rc(::ibv_query_device_ex(ctx_, &query, &device_attr_ex_),
            "failed to query extended attributes");
-
   auto link_layer = [&]() {
     switch (port_attr_.link_layer) {
     case IBV_LINK_LAYER_ETHERNET:
@@ -95,26 +95,27 @@ void device::open_device(struct ibv_device *target, uint16_t port_num) {
                    port_attr_.lid, link_layer);
 }
 
-device::device(struct ibv_device *target, uint16_t port_num) {
+device::device(struct ibv_device *target, uint32_t port_num, uint32_t gid_num) {
   assert(target != nullptr);
-  open_device(target, port_num);
+  open_device(target, port_num, gid_num);
 }
 
-device::device(std::string const &device_name, uint16_t port_num)
-    : device_(nullptr), port_num_(0) {
+device::device(std::string const &device_name, uint32_t port_num,
+               uint32_t gid_num)
+    : device_(nullptr), port_num_(0), gid_num_(0) {
   int32_t nr_devices = 0;
   auto devices = device_list();
   for (auto target : devices) {
     if (::ibv_get_device_name(target) == device_name) {
-      open_device(target, port_num);
+      open_device(target, port_num, gid_num);
       return;
     }
   }
   throw_with("no device named %s found", device_name.c_str());
 }
 
-device::device(uint16_t device_num, uint16_t port_num)
-    : device_(nullptr), port_num_(0) {
+device::device(uint16_t device_num, uint32_t port_num, uint32_t gid_num)
+    : device_(nullptr), port_num_(0), gid_num_(0) {
   auto devices = device_list();
   if (device_num >= devices.size()) {
     char buffer[kErrorStringBufferSize] = {0};
@@ -126,18 +127,20 @@ device::device(uint16_t device_num, uint16_t port_num)
   open_device(devices.at(device_num), port_num);
 }
 
-uint16_t device::port_num() { return port_num_; }
+union ibv_gid device::gid() {
+  return gid_;
+}
+
+uint32_t device::port_num() { return port_num_; }
 
 uint16_t device::lid() { return port_attr_.lid; }
 
 bool device::is_compare_and_swap_supported() {
-  return attr_ex_.pci_atomic_caps.compare_swap;
+  return device_attr_ex_.orig_attr.atomic_cap != IBV_ATOMIC_NONE;
 }
 
-bool device::is_swap_supported() { return attr_ex_.pci_atomic_caps.swap; }
-
 bool device::is_fetch_and_add_supported() {
-  return attr_ex_.pci_atomic_caps.fetch_add;
+  return device_attr_ex_.orig_attr.atomic_cap != IBV_ATOMIC_NONE;
 }
 
 device::~device() {

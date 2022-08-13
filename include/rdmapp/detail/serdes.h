@@ -6,6 +6,8 @@
 #include <netinet/in.h>
 #include <type_traits>
 
+#include <infiniband/verbs.h>
+
 namespace rdmapp {
 namespace detail {
 
@@ -21,19 +23,34 @@ static inline uint32_t hton(uint32_t const &value) { return ::htobe32(value); }
 
 static inline uint64_t hton(uint64_t const &value) { return ::htobe64(value); }
 
-template <class T, class It,
-          class U = typename std::enable_if<std::is_integral<T>::value>::type>
-void serialize(T const &value, It &it) {
+template <class T, class It>
+static inline typename std::enable_if<std::is_integral<T>::value>::type
+serialize(T const &value, It &it) {
   T nvalue = hton(value);
-  std::copy_n(reinterpret_cast<uint8_t *>(&nvalue), sizeof(T), it);
+  std::copy_n(reinterpret_cast<const uint8_t *>(&nvalue), sizeof(T), it);
 }
 
-template <class T, class It,
-          class U = typename std::enable_if<std::is_integral<T>::value>::type>
-void deserialize(It &it, T &value) {
+template <class T, class It>
+static inline
+    typename std::enable_if<std::is_same<T, union ibv_gid>::value>::type
+    serialize(T const &value, It &it) {
+  std::copy_n(reinterpret_cast<const uint8_t *>(&value), sizeof(T), it);
+}
+
+template <class T, class It>
+static inline typename std::enable_if<std::is_integral<T>::value>::type
+deserialize(It &it, T &value) {
   std::copy_n(it, sizeof(T), reinterpret_cast<uint8_t *>(&value));
   it += sizeof(T);
   value = ntoh(value);
+}
+
+template <class T, class It>
+static inline
+    typename std::enable_if<std::is_same<T, union ibv_gid>::value>::type
+    deserialize(It &it, T &value) {
+  std::copy_n(it, sizeof(T), reinterpret_cast<uint8_t *>(&value));
+  it += sizeof(T);
 }
 
 } // namespace detail
