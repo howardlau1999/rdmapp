@@ -40,6 +40,9 @@ rdmapp::task<void> handle_qp(std::shared_ptr<rdmapp::qp> qp) {
       std::move(qp->pd_ptr()->reg_mr(&counter, sizeof(counter))));
   auto counter_mr_serialized = counter_mr->serialize();
   co_await qp->send(counter_mr_serialized.data(), counter_mr_serialized.size());
+  std::cout << "Sent mr addr=" << counter_mr->addr()
+            << " length=" << counter_mr->length()
+            << " rkey=" << counter_mr->rkey() << " to client" << std::endl;
   imm = co_await qp->recv(local_mr);
   assert(imm.has_value());
   std::cout << "Fetched and added by client: " << counter << std::endl;
@@ -84,6 +87,9 @@ rdmapp::task<void> client(rdmapp::connector &connector) {
   char counter_mr_serialized[rdmapp::remote_mr::kSerializedSize];
   co_await qp->recv(counter_mr_serialized, sizeof(counter_mr_serialized));
   auto counter_mr = rdmapp::remote_mr::deserialize(counter_mr_serialized);
+  std::cout << "Received mr addr=" << counter_mr.addr()
+            << " length=" << counter_mr.length()
+            << " rkey=" << counter_mr.rkey() << " from server" << std::endl;
   uint64_t counter = 0;
   co_await qp->fetch_and_add(counter_mr, &counter, sizeof(counter), 1);
   std::cout << "Fetched and added from server: " << counter << std::endl;

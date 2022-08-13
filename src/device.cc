@@ -69,7 +69,6 @@ struct ibv_device *device_list::at(size_t i) {
   return devices_[i];
 }
 
-
 void device::open_device(struct ibv_device *target, uint16_t port_num) {
   device_ = target;
   port_num_ = port_num;
@@ -77,12 +76,21 @@ void device::open_device(struct ibv_device *target, uint16_t port_num) {
   check_ptr(ctx_, "failed to open device");
   check_rc(::ibv_query_port(ctx_, port_num_, &port_attr_),
            "failed to query port");
-  const char *link_layer = "unspecified";
-  if (port_attr_.link_layer == IBV_LINK_LAYER_ETHERNET) {
-    link_layer = "ethernet";
-  } else if (port_attr_.link_layer == IBV_LINK_LAYER_INFINIBAND) {
-    link_layer = "infiniband";
-  }
+  check_rc(::ibv_query_device(ctx_, &attr_),
+           "failed to query device attributes");
+  struct ibv_query_device_ex_input query = {};
+  check_rc(::ibv_query_device_ex(ctx_, &query, &attr_ex_),
+           "failed to query extended attributes");
+
+  auto link_layer = [&]() {
+    switch (port_attr_.link_layer) {
+    case IBV_LINK_LAYER_ETHERNET:
+      return "ethernet";
+    case IBV_LINK_LAYER_INFINIBAND:
+      return "infiniband";
+    }
+    return "unspecified";
+  }();
   RDMAPP_LOG_DEBUG("opened Infiniband device lid=%d link_layer=%s",
                    port_attr_.lid, link_layer);
 }
@@ -109,7 +117,7 @@ device::device(uint16_t device_num, uint16_t port_num)
     : device_(nullptr), port_num_(0) {
   auto devices = device_list();
   if (device_num >= devices.size()) {
-    char buffer[256] = {0};
+    char buffer[kErrorStringBufferSize] = {0};
     ::snprintf(buffer, sizeof(buffer),
                "requested device number %d out of range, %lu devices available",
                device_num, devices.size());
@@ -121,6 +129,16 @@ device::device(uint16_t device_num, uint16_t port_num)
 uint16_t device::port_num() { return port_num_; }
 
 uint16_t device::lid() { return port_attr_.lid; }
+
+bool device::is_compare_and_swap_supported() {
+  return attr_ex_.pci_atomic_caps.compare_swap;
+}
+
+bool device::is_swap_supported() { return attr_ex_.pci_atomic_caps.swap; }
+
+bool device::is_fetch_and_add_supported() {
+  return attr_ex_.pci_atomic_caps.fetch_add;
+}
 
 device::~device() {
   if (ctx_) {
