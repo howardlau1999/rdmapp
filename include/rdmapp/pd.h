@@ -20,6 +20,7 @@ class pd : public noncopyable, public std::enable_shared_from_this<pd> {
 
 public:
   pd(std::shared_ptr<device> device);
+  std::shared_ptr<device> device_ptr() const;
   mr<tags::mr::local> reg_mr(void *addr, size_t length);
   mr<tags::mr::local> reg_mr(void *addr, size_t length, int flags);
   ~pd();

@@ -27,6 +27,7 @@ mr<tags::mr::local>::operator=(mr<tags::mr::local> &&other) {
 }
 
 mr<tags::mr::local>::~mr() {
+  if (!mr_) return;
   auto addr = mr_->addr;
   if (auto rc = ::ibv_dereg_mr(mr_); rc != 0) {
     RDMAPP_LOG_ERROR("failed to dereg mr %p addr=%p", mr_, addr);

@@ -63,7 +63,7 @@ public:
     uint64_t swap_;
     uint32_t imm_;
     struct ibv_wc wc_;
-    enum ibv_wr_opcode opcode_;
+    const enum ibv_wr_opcode opcode_;
 
   public:
     send_awaitable(std::shared_ptr<qp> qp, void *buffer, size_t length,

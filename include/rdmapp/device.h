@@ -41,6 +41,8 @@ class device : public noncopyable {
   struct ibv_device *device_;
   struct ibv_context *ctx_;
   struct ibv_port_attr port_attr_;
+  struct ibv_device_attr attr_;
+  struct ibv_device_attr_ex attr_ex_;
 
   uint16_t port_num_;
   friend class pd;
@@ -55,6 +57,9 @@ public:
   device(uint16_t device_num = 0, uint16_t port_num = 1);
   uint16_t port_num();
   uint16_t lid();
+  bool is_fetch_and_add_supported();
+  bool is_compare_and_swap_supported();
+  bool is_swap_supported();
   ~device();
 };
 

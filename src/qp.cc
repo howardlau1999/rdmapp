@@ -80,7 +80,7 @@ std::shared_ptr<pd> qp::pd_ptr() const { return pd_; }
 std::vector<uint8_t> qp::serialize() const {
   std::vector<uint8_t> buffer;
   auto it = std::back_inserter(buffer);
-  detail::serialize(pd_->device_->lid(), it);
+  detail::serialize(pd_->device_ptr()->lid(), it);
   detail::serialize(qp_->qp_num, it);
   detail::serialize(sq_psn_, it);
   detail::serialize(static_cast<uint32_t>(user_data_.size()), it);
@@ -109,7 +109,7 @@ void qp::create() {
   check_ptr(qp_, "failed to create qp");
   sq_psn_ = next_sq_psn.fetch_add(1);
   RDMAPP_LOG_TRACE("created qp %p lid=%u qpn=%u psn=%u", qp_,
-                   pd_->device_->lid(), qp_->qp_num, sq_psn_);
+                   pd_->device_ptr()->lid(), qp_->qp_num, sq_psn_);
 }
 
 void qp::init() {
@@ -117,7 +117,7 @@ void qp::init() {
   ::bzero(&qp_attr, sizeof(qp_attr));
   qp_attr.qp_state = IBV_QPS_INIT;
   qp_attr.pkey_index = 0;
-  qp_attr.port_num = pd_->device_->port_num();
+  qp_attr.port_num = pd_->device_ptr()->port_num();
   qp_attr.qp_access_flags = IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ |
                             IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_ATOMIC;
 
@@ -140,7 +140,7 @@ void qp::rtr(uint16_t remote_lid, uint32_t remote_qpn, uint32_t remote_psn) {
   qp_attr.ah_attr.dlid = remote_lid;
   qp_attr.ah_attr.sl = 0;
   qp_attr.ah_attr.src_path_bits = 0;
-  qp_attr.ah_attr.port_num = pd_->device_->port_num();
+  qp_attr.ah_attr.port_num = pd_->device_ptr()->port_num();
   check_rc(::ibv_modify_qp(qp_, &qp_attr,
                            IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU |
                                IBV_QP_DEST_QPN | IBV_QP_RQ_PSN |
@@ -216,7 +216,7 @@ task<void> qp::send_qp(socket::tcp_connection &connection) {
     local_qp_sent += n;
   }
   RDMAPP_LOG_TRACE("sent qp lid=%u qpn=%u psn=%u user_data_size=%lu",
-                   pd_->device_->lid(), qp_->qp_num, sq_psn_,
+                   pd_->device_ptr()->lid(), qp_->qp_num, sq_psn_,
                    user_data_.size());
   co_return;
 }
@@ -328,6 +328,12 @@ void qp::send_awaitable::await_suspend(std::coroutine_handle<> h) {
       opcode_ == IBV_WR_ATOMIC_FETCH_AND_ADD ||
       opcode_ == IBV_WR_ATOMIC_CMP_AND_SWP) {
     assert(remote_mr_.addr() != nullptr);
+    if (opcode_ == IBV_WR_RDMA_READ) {
+      assert(local_mr_->length() >= remote_mr_.length());
+    }
+    if (opcode_ == IBV_WR_RDMA_WRITE || opcode_ == IBV_WR_RDMA_WRITE_WITH_IMM) {
+      assert(local_mr_->length() <= remote_mr_.length());
+    }
     send_wr.wr.rdma.remote_addr = reinterpret_cast<uint64_t>(remote_mr_.addr());
     send_wr.wr.rdma.rkey = remote_mr_.rkey();
     if (opcode_ == IBV_WR_RDMA_WRITE_WITH_IMM) {
@@ -381,6 +387,7 @@ qp::send_awaitable qp::read(mr<tags::mr::remote> const &remote_mr, void *buffer,
 qp::send_awaitable qp::fetch_and_add(mr<tags::mr::remote> const &remote_mr,
                                      void *buffer, size_t length,
                                      uint64_t add) {
+  assert(pd_->device_ptr()->is_fetch_and_add_supported());
   return qp::send_awaitable(this->shared_from_this(), buffer, length,
                             IBV_WR_ATOMIC_FETCH_AND_ADD, remote_mr, add);
 }
@@ -388,6 +395,7 @@ qp::send_awaitable qp::fetch_and_add(mr<tags::mr::remote> const &remote_mr,
 qp::send_awaitable qp::compare_and_swap(mr<tags::mr::remote> const &remote_mr,
                                         void *buffer, size_t length,
                                         uint64_t compare, uint64_t swap) {
+  assert(pd_->device_ptr()->is_compare_and_swap_supported());
   return qp::send_awaitable(this->shared_from_this(), buffer, length,
                             IBV_WR_ATOMIC_CMP_AND_SWP, remote_mr, compare,
                             swap);
@@ -420,6 +428,7 @@ qp::send_awaitable qp::read(mr<tags::mr::remote> const &remote_mr,
 qp::send_awaitable
 qp::fetch_and_add(mr<tags::mr::remote> const &remote_mr,
                   std::shared_ptr<mr<tags::mr::local>> local_mr, uint64_t add) {
+  assert(pd_->device_ptr()->is_fetch_and_add_supported());
   return qp::send_awaitable(this->shared_from_this(), local_mr,
                             IBV_WR_ATOMIC_FETCH_AND_ADD, remote_mr, add);
 }
@@ -428,6 +437,7 @@ qp::send_awaitable
 qp::compare_and_swap(mr<tags::mr::remote> const &remote_mr,
                      std::shared_ptr<mr<tags::mr::local>> local_mr,
                      uint64_t compare, uint64_t swap) {
+  assert(pd_->device_ptr()->is_compare_and_swap_supported());
   return qp::send_awaitable(this->shared_from_this(), local_mr,
                             IBV_WR_ATOMIC_CMP_AND_SWP, remote_mr, compare,
                             swap);
