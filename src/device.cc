@@ -132,10 +132,6 @@ bool device::is_compare_and_swap_supported() {
   return device_attr_ex_.orig_attr.atomic_cap != IBV_ATOMIC_NONE;
 }
 
-bool device::is_swap_supported() {
-  return device_attr_ex_.pci_atomic_caps.compare_swap;
-}
-
 bool device::is_fetch_and_add_supported() {
   return device_attr_ex_.orig_attr.atomic_cap != IBV_ATOMIC_NONE;
 }

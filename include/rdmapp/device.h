@@ -58,7 +58,6 @@ public:
   uint16_t lid();
   bool is_fetch_and_add_supported();
   bool is_compare_and_swap_supported();
-  bool is_swap_supported();
   ~device();
 };
 
