@@ -387,6 +387,7 @@ qp::send_awaitable qp::read(mr<tags::mr::remote> const &remote_mr, void *buffer,
 qp::send_awaitable qp::fetch_and_add(mr<tags::mr::remote> const &remote_mr,
                                      void *buffer, size_t length,
                                      uint64_t add) {
+  assert(pd_->device_ptr()->is_fetch_and_add_supported());
   return qp::send_awaitable(this->shared_from_this(), buffer, length,
                             IBV_WR_ATOMIC_FETCH_AND_ADD, remote_mr, add);
 }
@@ -394,6 +395,7 @@ qp::send_awaitable qp::fetch_and_add(mr<tags::mr::remote> const &remote_mr,
 qp::send_awaitable qp::compare_and_swap(mr<tags::mr::remote> const &remote_mr,
                                         void *buffer, size_t length,
                                         uint64_t compare, uint64_t swap) {
+  assert(pd_->device_ptr()->is_compare_and_swap_supported());
   return qp::send_awaitable(this->shared_from_this(), buffer, length,
                             IBV_WR_ATOMIC_CMP_AND_SWP, remote_mr, compare,
                             swap);
@@ -426,9 +428,7 @@ qp::send_awaitable qp::read(mr<tags::mr::remote> const &remote_mr,
 qp::send_awaitable
 qp::fetch_and_add(mr<tags::mr::remote> const &remote_mr,
                   std::shared_ptr<mr<tags::mr::local>> local_mr, uint64_t add) {
-  if (!pd_->device_ptr()->is_fetch_and_add_supported()) {
-    throw std::runtime_error("device does not support fetch and add");
-  }
+  assert(pd_->device_ptr()->is_fetch_and_add_supported());
   return qp::send_awaitable(this->shared_from_this(), local_mr,
                             IBV_WR_ATOMIC_FETCH_AND_ADD, remote_mr, add);
 }
@@ -437,9 +437,7 @@ qp::send_awaitable
 qp::compare_and_swap(mr<tags::mr::remote> const &remote_mr,
                      std::shared_ptr<mr<tags::mr::local>> local_mr,
                      uint64_t compare, uint64_t swap) {
-  if (!pd_->device_ptr()->is_compare_and_swap_supported()) {
-    throw std::runtime_error("device does not support compare and swap");
-  }
+  assert(pd_->device_ptr()->is_compare_and_swap_supported());
   return qp::send_awaitable(this->shared_from_this(), local_mr,
                             IBV_WR_ATOMIC_CMP_AND_SWP, remote_mr, compare,
                             swap);
