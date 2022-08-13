@@ -76,10 +76,8 @@ void device::open_device(struct ibv_device *target, uint16_t port_num) {
   check_ptr(ctx_, "failed to open device");
   check_rc(::ibv_query_port(ctx_, port_num_, &port_attr_),
            "failed to query port");
-  check_rc(::ibv_query_device(ctx_, &attr_),
-           "failed to query device attributes");
   struct ibv_query_device_ex_input query = {};
-  check_rc(::ibv_query_device_ex(ctx_, &query, &attr_ex_),
+  check_rc(::ibv_query_device_ex(ctx_, &query, &device_attr_ex_),
            "failed to query extended attributes");
 
   auto link_layer = [&]() {
@@ -131,13 +129,15 @@ uint16_t device::port_num() { return port_num_; }
 uint16_t device::lid() { return port_attr_.lid; }
 
 bool device::is_compare_and_swap_supported() {
-  return attr_ex_.pci_atomic_caps.compare_swap;
+  return device_attr_ex_.orig_attr.atomic_cap != IBV_ATOMIC_NONE;
 }
 
-bool device::is_swap_supported() { return attr_ex_.pci_atomic_caps.swap; }
+bool device::is_swap_supported() {
+  return device_attr_ex_.pci_atomic_caps.compare_swap;
+}
 
 bool device::is_fetch_and_add_supported() {
-  return attr_ex_.pci_atomic_caps.fetch_add;
+  return device_attr_ex_.orig_attr.atomic_cap != IBV_ATOMIC_NONE;
 }
 
 device::~device() {
