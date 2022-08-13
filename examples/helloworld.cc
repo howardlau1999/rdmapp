@@ -1,12 +1,15 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <cstdint>
 #include <exception>
 #include <iostream>
 #include <memory>
 #include <rdmapp/rdmapp.h>
 #include <string>
 #include <thread>
+
+#include "rdmapp/mr.h"
 
 using namespace std::literals::chrono_literals;
 
@@ -31,6 +34,18 @@ rdmapp::task<void> handle_qp(std::shared_ptr<rdmapp::qp> qp) {
   assert(imm.has_value());
   std::cout << "Written by client (imm=" << imm.value() << "): " << buffer
             << std::endl;
+
+  uint64_t counter = 42;
+  auto counter_mr = std::make_shared<rdmapp::local_mr>(
+      std::move(qp->pd_ptr()->reg_mr(&counter, sizeof(counter))));
+  auto counter_mr_serialized = counter_mr->serialize();
+  co_await qp->send(counter_mr_serialized.data(), counter_mr_serialized.size());
+  imm = co_await qp->recv(local_mr);
+  assert(imm.has_value());
+  std::cout << "Fetched and added by client: " << counter << std::endl;
+  imm = co_await qp->recv(local_mr);
+  assert(imm.has_value());
+  std::cout << "Compared and swapped by client: " << counter << std::endl;
 
   co_return;
 }
@@ -64,6 +79,18 @@ rdmapp::task<void> client(rdmapp::connector &connector) {
   co_await qp->read(remote_mr, buffer, sizeof(buffer));
   std::cout << "Read from server: " << buffer << std::endl;
   std::copy_n("world", sizeof(buffer), buffer);
+  co_await qp->write_with_imm(remote_mr, buffer, sizeof(buffer), 1);
+
+  char counter_mr_serialized[rdmapp::remote_mr::kSerializedSize];
+  co_await qp->recv(counter_mr_serialized, sizeof(counter_mr_serialized));
+  auto counter_mr = rdmapp::remote_mr::deserialize(counter_mr_serialized);
+  uint64_t counter = 0;
+  co_await qp->fetch_and_add(counter_mr, &counter, sizeof(counter), 1);
+  std::cout << "Fetched and added from server: " << counter << std::endl;
+  co_await qp->write_with_imm(remote_mr, buffer, sizeof(buffer), 1);
+  co_await qp->compare_and_swap(counter_mr, &counter, sizeof(counter), 43,
+                                4422);
+  std::cout << "Compared and swapped from server: " << counter << std::endl;
   co_await qp->write_with_imm(remote_mr, buffer, sizeof(buffer), 1);
 
   co_return;
