@@ -20,12 +20,13 @@
 #include <infiniband/verbs.h>
 
 #include "rdmapp/cq_poller.h"
-#include "rdmapp/detail/debug.h"
-#include "rdmapp/detail/serdes.h"
 #include "rdmapp/error.h"
 #include "rdmapp/executor.h"
 #include "rdmapp/pd.h"
 #include "rdmapp/srq.h"
+
+#include "rdmapp/detail/debug.h"
+#include "rdmapp/detail/serdes.h"
 
 namespace rdmapp {
 

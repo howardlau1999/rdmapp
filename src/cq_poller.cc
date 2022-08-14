@@ -5,8 +5,9 @@
 
 #include <infiniband/verbs.h>
 
-#include "rdmapp/detail/debug.h"
 #include "rdmapp/executor.h"
+
+#include "rdmapp/detail/debug.h"
 
 namespace rdmapp {
 

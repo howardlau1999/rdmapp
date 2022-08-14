@@ -5,12 +5,13 @@
 #include <memory>
 #include <sys/socket.h>
 
-#include "rdmapp/detail/noncopyable.h"
 #include "rdmapp/device.h"
 #include "rdmapp/pd.h"
 #include "rdmapp/qp.h"
 #include "rdmapp/socket/channel.h"
 #include "rdmapp/socket/tcp_listener.h"
+
+#include "rdmapp/detail/noncopyable.h"
 
 namespace rdmapp {
 

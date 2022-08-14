@@ -83,7 +83,10 @@ IfMacros:
   - KJ_IF_MAYBE
 IncludeBlocks:   Regroup
 IncludeCategories:
-  - Regex:           '^"(rdmapp)/'
+  - Regex:           '^"(rdmapp)/(detail)'
+    Priority:        4
+    CaseSensitive:   false
+  - Regex:           '^("|<)(rdmapp)/'
     Priority:        3
     CaseSensitive:   false
   - Regex:           '^<(infiniband)/'

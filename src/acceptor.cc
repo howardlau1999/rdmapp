@@ -16,7 +16,6 @@
 #include <unistd.h>
 #include <vector>
 
-#include "rdmapp/detail/debug.h"
 #include "rdmapp/device.h"
 #include "rdmapp/error.h"
 #include "rdmapp/qp.h"
@@ -24,6 +23,8 @@
 #include "rdmapp/socket/tcp_connection.h"
 #include "rdmapp/socket/tcp_listener.h"
 #include "rdmapp/srq.h"
+
+#include "rdmapp/detail/debug.h"
 
 namespace rdmapp {
 

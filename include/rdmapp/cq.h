@@ -6,9 +6,10 @@
 
 #include <infiniband/verbs.h>
 
-#include "rdmapp/detail/noncopyable.h"
 #include "rdmapp/device.h"
 #include "rdmapp/error.h"
+
+#include "rdmapp/detail/noncopyable.h"
 
 namespace rdmapp {
 

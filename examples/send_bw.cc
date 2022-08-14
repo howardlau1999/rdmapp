@@ -5,9 +5,10 @@
 #include <iostream>
 #include <memory>
 #include <ratio>
-#include <rdmapp/rdmapp.h>
 #include <string>
 #include <thread>
+
+#include <rdmapp/rdmapp.h>
 
 using namespace std::literals::chrono_literals;
 

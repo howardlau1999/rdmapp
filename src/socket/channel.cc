@@ -8,9 +8,10 @@
 #include <memory>
 #include <unistd.h>
 
-#include "rdmapp/detail/debug.h"
 #include "rdmapp/error.h"
 #include "rdmapp/socket/event_loop.h"
+
+#include "rdmapp/detail/debug.h"
 
 namespace rdmapp {
 namespace socket {

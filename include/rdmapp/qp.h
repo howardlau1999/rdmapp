@@ -11,13 +11,14 @@
 #include <infiniband/verbs.h>
 
 #include "rdmapp/cq.h"
-#include "rdmapp/detail/noncopyable.h"
-#include "rdmapp/detail/serdes.h"
 #include "rdmapp/device.h"
 #include "rdmapp/pd.h"
 #include "rdmapp/socket/tcp_connection.h"
 #include "rdmapp/srq.h"
 #include "rdmapp/task.h"
+
+#include "rdmapp/detail/noncopyable.h"
+#include "rdmapp/detail/serdes.h"
 
 namespace rdmapp {
 

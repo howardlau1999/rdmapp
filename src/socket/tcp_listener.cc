@@ -8,9 +8,10 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
-#include "rdmapp/detail/debug.h"
 #include "rdmapp/error.h"
 #include "rdmapp/socket/channel.h"
+
+#include "rdmapp/detail/debug.h"
 
 namespace rdmapp {
 namespace socket {

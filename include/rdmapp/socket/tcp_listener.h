@@ -2,8 +2,9 @@
 
 #include <memory>
 
-#include "rdmapp/detail/noncopyable.h"
 #include "rdmapp/socket/event_loop.h"
+
+#include "rdmapp/detail/noncopyable.h"
 
 namespace rdmapp {
 namespace socket {

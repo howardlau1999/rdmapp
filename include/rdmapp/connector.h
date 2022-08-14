@@ -3,11 +3,12 @@
 #include <memory>
 
 #include "rdmapp/cq.h"
-#include "rdmapp/detail/noncopyable.h"
 #include "rdmapp/pd.h"
 #include "rdmapp/qp.h"
 #include "rdmapp/socket/event_loop.h"
 #include "rdmapp/task.h"
+
+#include "rdmapp/detail/noncopyable.h"
 
 namespace rdmapp {
 

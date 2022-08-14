@@ -4,9 +4,10 @@
 
 #include <infiniband/verbs.h>
 
-#include "rdmapp/detail/noncopyable.h"
 #include "rdmapp/device.h"
 #include "rdmapp/mr.h"
+
+#include "rdmapp/detail/noncopyable.h"
 
 namespace rdmapp {
 
