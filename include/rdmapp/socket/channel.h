@@ -8,6 +8,11 @@ namespace rdmapp {
 namespace socket {
 
 class event_loop;
+
+/**
+ * @brief This class represents a pollable channel.
+ *
+ */
 class channel : public std::enable_shared_from_this<channel> {
 public:
   static std::function<void()> noop_callback;
