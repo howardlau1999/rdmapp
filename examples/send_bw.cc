@@ -22,7 +22,7 @@ rdmapp::task<void> worker(size_t id, std::shared_ptr<rdmapp::qp> qp) {
   std::vector<uint8_t> buffer;
   buffer.resize(kBufferSize);
   auto local_mr = std::make_shared<rdmapp::local_mr>(
-      std::move(qp->pd_ptr()->reg_mr(&buffer[0], buffer.size())));
+      qp->pd_ptr()->reg_mr(&buffer[0], buffer.size()));
   std::cout << "Worker " << id << " started" << std::endl;
   for (size_t i = 0; i < kSendCount; ++i) {
     if (Client) {
