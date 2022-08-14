@@ -54,10 +54,10 @@ rdmapp::task<void> handler(std::shared_ptr<rdmapp::qp> qp) {
   }
   auto tok = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> seconds = tok - tik;
-  double gb = static_cast<double>(kTotalSize) / 1024 / 1024 / 1024;
-  double throughput = gb / seconds.count();
-  std::cout << "Total: " << gb << " GB, Elapsed: " << seconds.count()
-            << "s, Throughput: " << throughput << "GB/s" << std::endl;
+  double mb = static_cast<double>(kTotalSize) / 1024 / 1024;
+  double throughput = mb / seconds.count();
+  std::cout << "Total: " << mb << " MB, Elapsed: " << seconds.count()
+            << " s, Throughput: " << throughput << " MB/s" << std::endl;
   co_return;
 }
 

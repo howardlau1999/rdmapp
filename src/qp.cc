@@ -369,9 +369,9 @@ bool qp::send_awaitable::await_suspend(std::coroutine_handle<> h) noexcept {
   } catch (std::runtime_error &e) {
     exception_ = std::make_exception_ptr(e);
     executor::destroy_callback(callback);
-    return true;
+    return false;
   }
-  return false;
+  return true;
 }
 
 bool qp::send_awaitable::is_rdma() const {
@@ -500,9 +500,9 @@ bool qp::recv_awaitable::await_suspend(std::coroutine_handle<> h) noexcept {
   } catch (std::runtime_error &e) {
     exception_ = std::make_exception_ptr(e);
     executor::destroy_callback(callback);
-    return true;
+    return false;
   }
-  return false;
+  return true;
 }
 
 std::optional<uint32_t> qp::recv_awaitable::await_resume() const {
