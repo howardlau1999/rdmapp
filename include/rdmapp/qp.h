@@ -116,8 +116,8 @@ public:
     bool await_ready() const noexcept;
     bool await_suspend(std::coroutine_handle<> h) noexcept;
     void await_resume() const;
-    bool is_rdma() const;
-    bool is_atomic() const;
+    constexpr bool is_rdma() const;
+    constexpr bool is_atomic() const;
   };
 
   class recv_awaitable {

@@ -12,16 +12,17 @@
 
 using namespace std::literals::chrono_literals;
 
-constexpr size_t kBufferSize = 2 * 1024 * 1024; // 2 MB
+constexpr size_t kBufferSizeBytes = 2 * 1024 * 1024; // 2 MB
 constexpr size_t kQPCount = 1;
 constexpr size_t kWorkerCount = 4;
 constexpr size_t kSendCount = 8 * 1024;
-constexpr size_t kTotalSize = kBufferSize * kSendCount * kWorkerCount;
+constexpr size_t kPrintInterval = 1024;
+constexpr size_t kTotalSizeBytes = kBufferSizeBytes * kSendCount * kWorkerCount;
 
 template <bool Client = false>
 rdmapp::task<void> worker(size_t id, std::shared_ptr<rdmapp::qp> qp) {
   std::vector<uint8_t> buffer;
-  buffer.resize(kBufferSize);
+  buffer.resize(kBufferSizeBytes);
   auto local_mr = std::make_shared<rdmapp::local_mr>(
       qp->pd_ptr()->reg_mr(&buffer[0], buffer.size()));
   std::cout << "Worker " << id << " started" << std::endl;
@@ -31,7 +32,7 @@ rdmapp::task<void> worker(size_t id, std::shared_ptr<rdmapp::qp> qp) {
     } else {
       co_await qp->send(local_mr);
     }
-    if ((i + 1) % 1024 == 0) {
+    if ((i + 1) % kPrintInterval == 0) {
       std::cout << "Worker " << id << (Client ? " recv " : " sent ") << (i + 1)
                 << " times" << std::endl;
     }
@@ -54,7 +55,7 @@ rdmapp::task<void> handler(std::shared_ptr<rdmapp::qp> qp) {
   }
   auto tok = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> seconds = tok - tik;
-  double mb = static_cast<double>(kTotalSize) / 1024 / 1024;
+  double mb = static_cast<double>(kTotalSizeBytes) / 1024 / 1024;
   double throughput = mb / seconds.count();
   std::cout << "Total: " << mb << " MB, Elapsed: " << seconds.count()
             << " s, Throughput: " << throughput << " MB/s" << std::endl;

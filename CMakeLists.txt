@@ -17,6 +17,12 @@ include_directories(include)
 
 option(RDMAPP_BUILD_EXAMPLES "Build examples" ON)
 option(RDMAPP_BUILD_DOCS "Build docs" OFF)
+option(RDMAPP_ASAN "Build with AddressSanitizer" OFF)
+
+if (RDMAPP_ASAN)
+  add_compile_options(-fno-omit-frame-pointer -fsanitize=address)
+  add_link_options(-fno-omit-frame-pointer -fsanitize=address)
+endif ()
 
 if (RDMAPP_BUILD_DOCS)
   # check if Doxygen is installed

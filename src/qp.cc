@@ -374,12 +374,12 @@ bool qp::send_awaitable::await_suspend(std::coroutine_handle<> h) noexcept {
   return true;
 }
 
-bool qp::send_awaitable::is_rdma() const {
+constexpr bool qp::send_awaitable::is_rdma() const {
   return opcode_ == IBV_WR_RDMA_READ || opcode_ == IBV_WR_RDMA_WRITE ||
          opcode_ == IBV_WR_RDMA_WRITE_WITH_IMM;
 }
 
-bool qp::send_awaitable::is_atomic() const {
+constexpr bool qp::send_awaitable::is_atomic() const {
   return opcode_ == IBV_WR_ATOMIC_CMP_AND_SWP ||
          opcode_ == IBV_WR_ATOMIC_FETCH_AND_ADD;
 }
