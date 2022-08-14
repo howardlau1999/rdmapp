@@ -10,6 +10,7 @@ class io_buf {
   std::vector<uint8_t> buffer_;
   size_t read_idx_;
   size_t write_idx_;
+
 public:
   io_buf();
   size_t length();

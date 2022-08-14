@@ -3,9 +3,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <shared_mutex>
 #include <sys/epoll.h>
 #include <unordered_map>
-#include <shared_mutex>
 
 #include "rdmapp/socket/channel.h"
 
@@ -19,7 +19,9 @@ class event_loop {
   std::shared_mutex mutex_;
   std::unordered_map<int, std::weak_ptr<channel>> channels_;
 
-  void register_channel(std::shared_ptr<channel> channel, struct epoll_event *event);
+  void register_channel(std::shared_ptr<channel> channel,
+                        struct epoll_event *event);
+
 public:
   event_loop(size_t max_events = 10);
   static std::shared_ptr<event_loop> new_loop(size_t max_events = 10);

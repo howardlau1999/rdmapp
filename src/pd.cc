@@ -18,9 +18,7 @@ pd::pd(std::shared_ptr<rdmapp::device> device) : device_(device) {
   RDMAPP_LOG_TRACE("alloc pd %p", pd_);
 }
 
-std::shared_ptr<device> pd::device_ptr() const {
-  return device_;
-}
+std::shared_ptr<device> pd::device_ptr() const { return device_; }
 
 mr<tags::mr::local> pd::reg_mr(void *buffer, size_t length) {
   return reg_mr(buffer, length,

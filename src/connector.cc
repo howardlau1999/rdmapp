@@ -3,7 +3,7 @@
 #include "rdmapp/pd.h"
 
 namespace rdmapp {
-  
+
 connector::connector(std::shared_ptr<socket::event_loop> loop,
                      std::string const &hostname, uint16_t port,
                      std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,

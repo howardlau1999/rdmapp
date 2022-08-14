@@ -73,9 +73,7 @@ bool tcp_listener::accept_awaitable::await_ready() {
 }
 
 void tcp_listener::accept_awaitable::await_suspend(std::coroutine_handle<> h) {
-  channel_->set_readable_callback([h]() {
-    h.resume();
-  });
+  channel_->set_readable_callback([h]() { h.resume(); });
   channel_->wait_readable();
 }
 

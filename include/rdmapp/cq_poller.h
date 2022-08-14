@@ -22,7 +22,8 @@ class cq_poller {
 
 public:
   cq_poller(std::shared_ptr<cq> cq, size_t batch_size = 16);
-  cq_poller(std::shared_ptr<cq> cq, std::shared_ptr<executor> executor, size_t batch_size = 16);
+  cq_poller(std::shared_ptr<cq> cq, std::shared_ptr<executor> executor,
+            size_t batch_size = 16);
   ~cq_poller();
 };
 

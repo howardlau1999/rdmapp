@@ -59,9 +59,7 @@ void channel::set_readable_callback(callback_fn &&callback) {
   readable_callback_ = callback;
 }
 
-std::shared_ptr<event_loop> channel::loop() {
-  return loop_;
-}
+std::shared_ptr<event_loop> channel::loop() { return loop_; }
 
 channel::~channel() {
   loop_->deregister(*this);
