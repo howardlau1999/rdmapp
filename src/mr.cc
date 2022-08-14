@@ -10,23 +10,20 @@
 
 namespace rdmapp {
 
-mr<tags::mr::local>::mr(std::shared_ptr<pd> pd, struct ibv_mr *mr)
-    : pd_(pd), mr_(mr) {}
+local_mr::mr(std::shared_ptr<pd> pd, struct ibv_mr *mr) : pd_(pd), mr_(mr) {}
 
-mr<tags::mr::local>::mr(mr<tags::mr::local> &&other)
-    : mr_(other.mr_), pd_(std::move(other.pd_)) {
+local_mr::mr(local_mr &&other) : mr_(other.mr_), pd_(std::move(other.pd_)) {
   other.mr_ = nullptr;
 }
 
-mr<tags::mr::local> &
-mr<tags::mr::local>::operator=(mr<tags::mr::local> &&other) {
+local_mr &local_mr::operator=(local_mr &&other) {
   mr_ = other.mr_;
   pd_ = std::move(other.pd_);
   other.mr_ = nullptr;
   return *this;
 }
 
-mr<tags::mr::local>::~mr() {
+local_mr::~mr() {
   if (!mr_)
     return;
   auto addr = mr_->addr;
@@ -37,7 +34,7 @@ mr<tags::mr::local>::~mr() {
   }
 }
 
-std::vector<uint8_t> mr<tags::mr::local>::serialize() const {
+std::vector<uint8_t> local_mr::serialize() const {
   std::vector<uint8_t> buffer;
   auto it = std::back_inserter(buffer);
   detail::serialize(reinterpret_cast<uint64_t>(mr_->addr), it);
@@ -46,21 +43,21 @@ std::vector<uint8_t> mr<tags::mr::local>::serialize() const {
   return buffer;
 }
 
-void *mr<tags::mr::local>::addr() const { return mr_->addr; }
+void *local_mr::addr() const { return mr_->addr; }
 
-size_t mr<tags::mr::local>::length() const { return mr_->length; }
+size_t local_mr::length() const { return mr_->length; }
 
-uint32_t mr<tags::mr::local>::rkey() const { return mr_->rkey; }
+uint32_t local_mr::rkey() const { return mr_->rkey; }
 
-uint32_t mr<tags::mr::local>::lkey() const { return mr_->lkey; }
+uint32_t local_mr::lkey() const { return mr_->lkey; }
 
-mr<tags::mr::remote>::mr(void *addr, uint32_t length, uint32_t rkey)
+remote_mr::mr(void *addr, uint32_t length, uint32_t rkey)
     : addr_(addr), length_(length), rkey_(rkey) {}
 
-void *mr<tags::mr::remote>::addr() { return addr_; }
+void *remote_mr::addr() { return addr_; }
 
-uint32_t mr<tags::mr::remote>::length() { return length_; }
+uint32_t remote_mr::length() { return length_; }
 
-uint32_t mr<tags::mr::remote>::rkey() { return rkey_; }
+uint32_t remote_mr::rkey() { return rkey_; }
 
 } // namespace rdmapp
