@@ -91,3 +91,12 @@ cmake --build build
 # To install
 cmake --install build
 ```
+
+## Developing
+
+Install `clang-format` and `pre-commit`. 
+
+```bash
+pip install pre-commit
+pre-commit install
+```
