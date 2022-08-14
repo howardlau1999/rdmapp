@@ -22,7 +22,7 @@ cq::cq(std::shared_ptr<device> device, size_t nr_cqe) : device_(device) {
 
 bool cq::poll(struct ibv_wc &wc) {
   if (auto rc = ::ibv_poll_cq(cq_, 1, &wc); rc < 0) {
-    throw_with("failed to poll cq: %s (rc=%d)", strerror(rc), rc);
+    check_rc(-rc, "failed to poll cq");
   } else if (rc == 0) {
     return false;
   } else {
