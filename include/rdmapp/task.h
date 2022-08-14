@@ -15,7 +15,7 @@ template <class CoroutineHandle> struct promise_base {
   std::suspend_never initial_suspend() { return {}; }
   auto final_suspend() noexcept {
     struct awaiter {
-      std::function<void()> release_detached_;
+      std::coroutine_handle<> release_detached_;
       bool await_ready() noexcept { return false; }
       std::coroutine_handle<>
       await_suspend(CoroutineHandle suspended) noexcept {
@@ -27,7 +27,7 @@ template <class CoroutineHandle> struct promise_base {
       }
       void await_resume() noexcept {
         if (release_detached_) {
-          release_detached_();
+          release_detached_.destroy();
         }
       }
     };
@@ -36,7 +36,7 @@ template <class CoroutineHandle> struct promise_base {
 
   std::exception_ptr exception_;
   std::coroutine_handle<> continuation_;
-  std::function<void()> release_detached_;
+  std::coroutine_handle<> release_detached_;
 };
 
 template <class T> struct task_awaiter;
@@ -94,7 +94,7 @@ template <class T> struct task : public noncopyable {
     void return_value(T &&value) { promise_.set_value(value); }
     std::shared_future<T> get_future() { return future_; }
     void set_detached_task(std::coroutine_handle<promise_type> h) {
-      this->release_detached_ = [h]() { h.destroy(); };
+      this->release_detached_ = h;
     }
     std::promise<T> promise_;
     std::shared_future<T> future_;
@@ -142,7 +142,7 @@ template <> struct task<void> : public noncopyable {
     void return_void() { promise_.set_value(); }
     std::shared_future<void> get_future() { return future_; }
     void set_detached_task(std::coroutine_handle<promise_type> h) {
-      release_detached_ = [h]() { h.destroy(); };
+      release_detached_ = h;
     }
     std::promise<void> promise_;
     std::shared_future<void> future_;
