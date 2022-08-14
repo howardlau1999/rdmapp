@@ -93,8 +93,8 @@ template <class T> struct task : public noncopyable {
     promise_type() : future_(promise_.get_future().share()) {}
     void return_value(T &&value) { promise_.set_value(value); }
     std::shared_future<T> get_future() { return future_; }
-    void set_detached_task(task<T> *detached) {
-      this->release_detached_ = [detached]() { delete detached; };
+    void set_detached_task(std::coroutine_handle<promise_type> h) {
+      this->release_detached_ = [h]() { h.destroy(); };
     }
     std::promise<T> promise_;
     std::shared_future<T> future_;
@@ -123,8 +123,7 @@ template <class T> struct task : public noncopyable {
   std::exception_ptr get_exception() const { return h_.promise().exception_; }
   void detach() {
     assert(!detached_);
-    auto detached_task = new task<T>(std::move(*this));
-    h_.promise().set_detached_task(detached_task);
+    h_.promise().set_detached_task(h_);
     detached_ = true;
   }
 };
@@ -142,8 +141,8 @@ template <> struct task<void> : public noncopyable {
     }
     void return_void() { promise_.set_value(); }
     std::shared_future<void> get_future() { return future_; }
-    void set_detached_task(task<void> *detached) {
-      release_detached_ = [detached]() { delete detached; };
+    void set_detached_task(std::coroutine_handle<promise_type> h) {
+      release_detached_ = [h]() { h.destroy(); };
     }
     std::promise<void> promise_;
     std::shared_future<void> future_;
@@ -174,8 +173,7 @@ template <> struct task<void> : public noncopyable {
   std::exception_ptr get_exception() const { return h_.promise().exception_; }
   void detach() {
     assert(!detached_);
-    auto detached_task = new task<void>(std::move(*this));
-    h_.promise().set_detached_task(detached_task);
+    h_.promise().set_detached_task(h_);
     detached_ = true;
   }
 };
