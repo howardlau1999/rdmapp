@@ -1,0 +1,4 @@
+<map id="rdmapp::device_list" name="rdmapp::device_list">
+<area shape="rect" id="node1" title="This class holds a list of devices available on the system." alt="" coords="10,80,143,107"/>
+<area shape="rect" id="node2" href="$classrdmapp_1_1noncopyable.html" title=" " alt="" coords="5,5,148,32"/>
+</map>

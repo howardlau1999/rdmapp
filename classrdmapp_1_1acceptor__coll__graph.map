@@ -1,0 +1,4 @@
+<map id="rdmapp::acceptor" name="rdmapp::acceptor">
+<area shape="rect" id="node1" title="This class is used to accept incoming connections and queue pairs." alt="" coords="16,80,137,107"/>
+<area shape="rect" id="node2" href="$classrdmapp_1_1noncopyable.html" title=" " alt="" coords="5,5,148,32"/>
+</map>

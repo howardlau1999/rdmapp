@@ -1,0 +1,4 @@
+<map id="rdmapp::device" name="rdmapp::device">
+<area shape="rect" id="node1" title="This class is an abstraction of an Infiniband device." alt="" coords="22,80,131,107"/>
+<area shape="rect" id="node2" href="$classrdmapp_1_1noncopyable.html" title=" " alt="" coords="5,5,148,32"/>
+</map>

@@ -1,0 +1,4 @@
+<map id="rdmapp::connector" name="rdmapp::connector">
+<area shape="rect" id="node1" title="This class is used to actively connect to a remote endpoint and establish a Queue Pair." alt="" coords="13,80,141,107"/>
+<area shape="rect" id="node2" href="$classrdmapp_1_1noncopyable.html" title=" " alt="" coords="5,5,148,32"/>
+</map>
