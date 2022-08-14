@@ -17,7 +17,8 @@ namespace rdmapp {
 namespace socket {
 
 channel::channel(int fd, std::shared_ptr<event_loop> loop)
-    : fd_(fd), loop_(loop) {}
+    : fd_(fd), loop_(loop), readable_callback_(noop_callback),
+      writable_callback_(noop_callback) {}
 
 int channel::fd() { return fd_; }
 
