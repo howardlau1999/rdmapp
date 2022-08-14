@@ -26,7 +26,7 @@ rdmapp::task<void> worker(size_t id, std::shared_ptr<rdmapp::qp> qp) {
       qp->pd_ptr()->reg_mr(&buffer[0], buffer.size()));
   std::cout << "Worker " << id << " started" << std::endl;
   for (size_t i = 0; i < kSendCount; ++i) {
-    if (Client) {
+    if constexpr (Client) {
       co_await qp->recv(local_mr);
     } else {
       co_await qp->send(local_mr);

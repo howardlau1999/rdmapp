@@ -321,16 +321,22 @@ qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp,
     : qp_(qp), local_mr_(local_mr), opcode_(opcode), remote_mr_(remote_mr),
       compare_add_(compare), swap_(swap) {}
 
+static inline struct ibv_sge fill_local_sge(local_mr const &mr) {
+  struct ibv_sge sge = {};
+  sge.addr = reinterpret_cast<uint64_t>(mr.addr());
+  sge.length = mr.length();
+  sge.lkey = mr.lkey();
+  return sge;
+}
+
 bool qp::send_awaitable::await_ready() const noexcept { return false; }
 bool qp::send_awaitable::await_suspend(std::coroutine_handle<> h) noexcept {
   auto callback = executor::make_callback([h, this](struct ibv_wc const &wc) {
     wc_ = wc;
     h.resume();
   });
-  struct ibv_sge send_sge = {};
-  send_sge.addr = reinterpret_cast<uint64_t>(local_mr_->addr());
-  send_sge.length = local_mr_->length();
-  send_sge.lkey = local_mr_->lkey();
+
+  auto send_sge = fill_local_sge(*local_mr_);
 
   struct ibv_send_wr send_wr = {};
   struct ibv_send_wr *bad_send_wr = nullptr;
@@ -479,10 +485,8 @@ bool qp::recv_awaitable::await_suspend(std::coroutine_handle<> h) noexcept {
     wc_ = wc;
     h.resume();
   });
-  struct ibv_sge recv_sge = {};
-  recv_sge.addr = reinterpret_cast<uint64_t>(local_mr_->addr());
-  recv_sge.length = local_mr_->length();
-  recv_sge.lkey = local_mr_->lkey();
+
+  auto recv_sge = fill_local_sge(*local_mr_);
 
   struct ibv_recv_wr recv_wr = {};
   struct ibv_recv_wr *bad_recv_wr = nullptr;
