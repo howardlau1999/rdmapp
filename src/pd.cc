@@ -28,12 +28,13 @@ local_mr pd::reg_mr(void *buffer, size_t length, int flags) {
 }
 
 pd::~pd() {
-  if (pd_ != nullptr) {
-    if (auto rc = ::ibv_dealloc_pd(pd_); rc != 0) [[unlikely]] {
-      RDMAPP_LOG_ERROR("failed to dealloc pd %p: %s", pd_, strerror(errno));
-    } else {
-      RDMAPP_LOG_TRACE("dealloc pd %p", pd_);
-    }
+  if (pd_ == nullptr) [[unlikely]] {
+    return;
+  }
+  if (auto rc = ::ibv_dealloc_pd(pd_); rc != 0) [[unlikely]] {
+    RDMAPP_LOG_ERROR("failed to dealloc pd %p: %s", pd_, strerror(errno));
+  } else {
+    RDMAPP_LOG_TRACE("dealloc pd %p", pd_);
   }
 }
 

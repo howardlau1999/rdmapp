@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstring>
 #include <endian.h>
+#include <exception>
 #include <iterator>
 #include <memory>
 #include <netdb.h>
@@ -321,7 +322,7 @@ qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp,
       compare_add_(compare), swap_(swap) {}
 
 bool qp::send_awaitable::await_ready() const noexcept { return false; }
-void qp::send_awaitable::await_suspend(std::coroutine_handle<> h) {
+bool qp::send_awaitable::await_suspend(std::coroutine_handle<> h) noexcept {
   auto callback = executor::make_callback([h, this](struct ibv_wc const &wc) {
     wc_ = wc;
     h.resume();
@@ -360,9 +361,11 @@ void qp::send_awaitable::await_suspend(std::coroutine_handle<> h) {
   try {
     qp_->post_send(send_wr, bad_send_wr);
   } catch (std::runtime_error &e) {
-    delete callback;
-    throw;
+    exception_ = std::make_exception_ptr(e);
+    executor::destroy_callback(callback);
+    return true;
   }
+  return false;
 }
 
 bool qp::send_awaitable::is_rdma() const {
@@ -376,6 +379,9 @@ bool qp::send_awaitable::is_atomic() const {
 }
 
 void qp::send_awaitable::await_resume() const {
+  if (exception_) [[unlikely]] {
+    std::rethrow_exception(exception_);
+  }
   check_wc_status(wc_.status, "failed to send");
 }
 
@@ -468,7 +474,7 @@ qp::recv_awaitable::recv_awaitable(std::shared_ptr<qp> qp,
     : qp_(qp), local_mr_(local_mr), wc_() {}
 
 bool qp::recv_awaitable::await_ready() const noexcept { return false; }
-void qp::recv_awaitable::await_suspend(std::coroutine_handle<> h) {
+bool qp::recv_awaitable::await_suspend(std::coroutine_handle<> h) noexcept {
   auto callback = executor::make_callback([h, this](struct ibv_wc const &wc) {
     wc_ = wc;
     h.resume();
@@ -488,12 +494,17 @@ void qp::recv_awaitable::await_suspend(std::coroutine_handle<> h) {
   try {
     qp_->post_recv(recv_wr, bad_recv_wr);
   } catch (std::runtime_error &e) {
-    delete callback;
-    throw;
+    exception_ = std::make_exception_ptr(e);
+    executor::destroy_callback(callback);
+    return true;
   }
+  return false;
 }
 
 std::optional<uint32_t> qp::recv_awaitable::await_resume() const {
+  if (exception_) [[unlikely]] {
+    std::rethrow_exception(exception_);
+  }
   check_wc_status(wc_.status, "failed to recv");
   if (wc_.wc_flags & IBV_WC_WITH_IMM) {
     return wc_.imm_data;
@@ -510,12 +521,14 @@ qp::recv_awaitable qp::recv(std::shared_ptr<local_mr> local_mr) {
 }
 
 qp::~qp() {
-  if (qp_ != nullptr) {
-    if (auto rc = ::ibv_destroy_qp(qp_); rc != 0) [[unlikely]] {
-      RDMAPP_LOG_ERROR("failed to destroy qp %p: %s", qp_, strerror(errno));
-    } else {
-      RDMAPP_LOG_TRACE("destroyed qp %p", qp_);
-    }
+  if (qp_ == nullptr) [[unlikely]] {
+    return;
+  }
+
+  if (auto rc = ::ibv_destroy_qp(qp_); rc != 0) [[unlikely]] {
+    RDMAPP_LOG_ERROR("failed to destroy qp %p: %s", qp_, strerror(errno));
+  } else {
+    RDMAPP_LOG_TRACE("destroyed qp %p", qp_);
   }
 }
 

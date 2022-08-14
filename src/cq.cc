@@ -36,12 +36,14 @@ size_t cq::poll(std::vector<struct ibv_wc> &wc_vec) {
 }
 
 cq::~cq() {
-  if (cq_ != nullptr) {
-    if (auto rc = ::ibv_destroy_cq(cq_); rc != 0) [[unlikely]] {
-      RDMAPP_LOG_ERROR("failed to destroy cq %p: %s", cq_, strerror(errno));
-    } else {
-      RDMAPP_LOG_TRACE("destroyed cq: %p", cq_);
-    }
+  if (cq_ == nullptr) [[unlikely]] {
+    return;
+  }
+
+  if (auto rc = ::ibv_destroy_cq(cq_); rc != 0) [[unlikely]] {
+    RDMAPP_LOG_ERROR("failed to destroy cq %p: %s", cq_, strerror(errno));
+  } else {
+    RDMAPP_LOG_TRACE("destroyed cq: %p", cq_);
   }
 }
 

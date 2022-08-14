@@ -116,7 +116,7 @@ void event_loop::loop() {
   bool close_triggered = false;
   while (!close_triggered) {
     int nr_events = ::epoll_wait(epoll_fd_, &events[0], max_events_, -1);
-    if (nr_events < 0 && errno == EINTR) {
+    if (nr_events < 0 && errno == EINTR) [[unlikely]] {
       continue;
     }
     check_errno(nr_events, "failed to epoll wait");

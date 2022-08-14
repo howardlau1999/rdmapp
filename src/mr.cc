@@ -24,7 +24,7 @@ local_mr &local_mr::operator=(local_mr &&other) {
 }
 
 local_mr::~mr() {
-  if (!mr_) {
+  if (mr_ == nullptr) [[unlikely]] {
     // This mr is moved.
     return;
   }

@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <exception>
 #include <iterator>
 #include <memory>
 #include <optional>
@@ -77,6 +78,7 @@ public:
   class send_awaitable {
     std::shared_ptr<qp> qp_;
     std::shared_ptr<local_mr> local_mr_;
+    std::exception_ptr exception_;
     remote_mr remote_mr_;
     uint64_t compare_add_;
     uint64_t swap_;
@@ -112,7 +114,7 @@ public:
                    enum ibv_wr_opcode opcode, remote_mr const &remote_mr,
                    uint64_t compare, uint64_t swap);
     bool await_ready() const noexcept;
-    void await_suspend(std::coroutine_handle<> h);
+    bool await_suspend(std::coroutine_handle<> h) noexcept;
     void await_resume() const;
     bool is_rdma() const;
     bool is_atomic() const;
@@ -121,6 +123,7 @@ public:
   class recv_awaitable {
     std::shared_ptr<qp> qp_;
     std::shared_ptr<local_mr> local_mr_;
+    std::exception_ptr exception_;
     struct ibv_wc wc_;
     enum ibv_wr_opcode opcode_;
 
@@ -128,7 +131,7 @@ public:
     recv_awaitable(std::shared_ptr<qp> qp, std::shared_ptr<local_mr> local_mr);
     recv_awaitable(std::shared_ptr<qp> qp, void *buffer, size_t length);
     bool await_ready() const noexcept;
-    void await_suspend(std::coroutine_handle<> h);
+    bool await_suspend(std::coroutine_handle<> h) noexcept;
     std::optional<uint32_t> await_resume() const;
   };
 

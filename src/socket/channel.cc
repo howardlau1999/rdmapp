@@ -65,7 +65,7 @@ std::shared_ptr<event_loop> channel::loop() { return loop_; }
 channel::~channel() {
   loop_->deregister(*this);
   assert(fd_ > 0);
-  if (auto rc = ::close(fd_); rc != 0) {
+  if (auto rc = ::close(fd_); rc != 0) [[unlikely]] {
     RDMAPP_LOG_ERROR("failed to close fd %d: %s (errno=%d)", fd_,
                      strerror(errno), errno);
   } else {

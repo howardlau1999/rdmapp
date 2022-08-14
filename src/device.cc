@@ -138,13 +138,15 @@ bool device::is_fetch_and_add_supported() const {
 }
 
 device::~device() {
-  if (ctx_) [[unlikely]] {
-    if (auto rc = ::ibv_close_device(ctx_); rc != 0) [[unlikely]] {
-      RDMAPP_LOG_ERROR("failed to close device lid=%d: %s", port_attr_.lid,
-                       strerror(rc));
-    } else {
-      RDMAPP_LOG_DEBUG("closed device lid=%d", port_attr_.lid);
-    }
+  if (ctx_ == nullptr) [[unlikely]] {
+    return;
+  }
+
+  if (auto rc = ::ibv_close_device(ctx_); rc != 0) [[unlikely]] {
+    RDMAPP_LOG_ERROR("failed to close device lid=%d: %s", port_attr_.lid,
+                     strerror(rc));
+  } else {
+    RDMAPP_LOG_DEBUG("closed device lid=%d", port_attr_.lid);
   }
 }
 
