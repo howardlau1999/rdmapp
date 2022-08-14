@@ -31,14 +31,14 @@
 namespace rdmapp {
 
 std::atomic<uint32_t> qp::next_sq_psn = 1;
-qp::qp(uint16_t remote_device_id, uint32_t remote_qpn, uint32_t remote_psn,
+qp::qp(uint16_t remote_lid, uint32_t remote_qpn, uint32_t remote_psn,
        std::shared_ptr<pd> pd, std::shared_ptr<cq> cq, std::shared_ptr<srq> srq)
-    : qp(remote_device_id, remote_qpn, remote_psn, pd, cq, cq, srq) {}
-qp::qp(uint16_t remote_device_id, uint32_t remote_qpn, uint32_t remote_psn,
+    : qp(remote_lid, remote_qpn, remote_psn, pd, cq, cq, srq) {}
+qp::qp(uint16_t remote_lid, uint32_t remote_qpn, uint32_t remote_psn,
        std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
        std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq)
     : qp(pd, recv_cq, send_cq, srq) {
-  rtr(remote_device_id, remote_qpn, remote_psn);
+  rtr(remote_lid, remote_qpn, remote_psn);
   rts();
 }
 
@@ -104,6 +104,10 @@ void qp::create() {
 
   if (srq_ != nullptr) {
     qp_init_attr.srq = srq_->srq_;
+    raw_srq_ = srq_->srq_;
+    post_recv_fn = &qp::post_recv_srq;
+  } else {
+    post_recv_fn = &qp::post_recv_rq;
   }
 
   qp_ = ::ibv_create_qp(pd_->pd_, &qp_init_attr);
@@ -222,26 +226,37 @@ task<void> qp::send_qp(socket::tcp_connection &connection) {
   co_return;
 }
 
-void qp::post_send(struct ibv_send_wr &send_wr,
+void qp::post_send(struct ibv_send_wr const &send_wr,
                    struct ibv_send_wr *&bad_send_wr) {
   RDMAPP_LOG_TRACE("post send wr_id=%p addr=%p",
                    reinterpret_cast<void *>(send_wr.wr_id),
                    reinterpret_cast<void *>(send_wr.sg_list->addr));
-  check_rc(::ibv_post_send(qp_, &send_wr, &bad_send_wr), "failed to post send");
+  check_rc(::ibv_post_send(qp_, const_cast<struct ibv_send_wr *>(&send_wr),
+                           &bad_send_wr),
+           "failed to post send");
 }
 
-void qp::post_recv(struct ibv_recv_wr &recv_wr,
-                   struct ibv_recv_wr *&bad_recv_wr) {
-  if (srq_) {
-    check_rc(::ibv_post_srq_recv(srq_->srq_, &recv_wr, &bad_recv_wr),
-             "failed to post srq recv");
-  } else {
-    RDMAPP_LOG_TRACE("post recv wr_id=%p addr=%p",
-                     reinterpret_cast<void *>(recv_wr.wr_id),
-                     reinterpret_cast<void *>(recv_wr.sg_list->addr));
-    check_rc(::ibv_post_recv(qp_, &recv_wr, &bad_recv_wr),
-             "failed to post recv");
-  }
+void qp::post_recv(struct ibv_recv_wr const &recv_wr,
+                   struct ibv_recv_wr *&bad_recv_wr) const {
+  (this->*(post_recv_fn))(recv_wr, bad_recv_wr);
+}
+
+void qp::post_recv_rq(struct ibv_recv_wr const &recv_wr,
+                      struct ibv_recv_wr *&bad_recv_wr) const {
+  RDMAPP_LOG_TRACE("post recv wr_id=%p addr=%p",
+                   reinterpret_cast<void *>(recv_wr.wr_id),
+                   reinterpret_cast<void *>(recv_wr.sg_list->addr));
+  check_rc(::ibv_post_recv(qp_, const_cast<struct ibv_recv_wr *>(&recv_wr),
+                           &bad_recv_wr),
+           "failed to post recv");
+}
+
+void qp::post_recv_srq(struct ibv_recv_wr const &recv_wr,
+                       struct ibv_recv_wr *&bad_recv_wr) const {
+  check_rc(::ibv_post_srq_recv(raw_srq_,
+                               const_cast<struct ibv_recv_wr *>(&recv_wr),
+                               &bad_recv_wr),
+           "failed to post srq recv");
 }
 
 qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp, void *buffer,
@@ -350,17 +365,17 @@ void qp::send_awaitable::await_suspend(std::coroutine_handle<> h) {
   }
 }
 
-bool qp::send_awaitable::is_rdma() {
+bool qp::send_awaitable::is_rdma() const {
   return opcode_ == IBV_WR_RDMA_READ || opcode_ == IBV_WR_RDMA_WRITE ||
          opcode_ == IBV_WR_RDMA_WRITE_WITH_IMM;
 }
 
-bool qp::send_awaitable::is_atomic() {
+bool qp::send_awaitable::is_atomic() const {
   return opcode_ == IBV_WR_ATOMIC_CMP_AND_SWP ||
          opcode_ == IBV_WR_ATOMIC_FETCH_AND_ADD;
 }
 
-void qp::send_awaitable::await_resume() {
+void qp::send_awaitable::await_resume() const {
   check_wc_status(wc_.status, "failed to send");
 }
 
@@ -478,7 +493,7 @@ void qp::recv_awaitable::await_suspend(std::coroutine_handle<> h) {
   }
 }
 
-std::optional<uint32_t> qp::recv_awaitable::await_resume() {
+std::optional<uint32_t> qp::recv_awaitable::await_resume() const {
   check_wc_status(wc_.status, "failed to recv");
   if (wc_.wc_flags & IBV_WC_WITH_IMM) {
     return wc_.imm_data;
@@ -496,7 +511,7 @@ qp::recv_awaitable qp::recv(std::shared_ptr<local_mr> local_mr) {
 
 qp::~qp() {
   if (qp_ != nullptr) {
-    if (auto rc = ::ibv_destroy_qp(qp_); rc != 0) {
+    if (auto rc = ::ibv_destroy_qp(qp_); rc != 0) [[unlikely]] {
       RDMAPP_LOG_ERROR("failed to destroy qp %p: %s", qp_, strerror(errno));
     } else {
       RDMAPP_LOG_TRACE("destroyed qp %p", qp_);

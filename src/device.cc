@@ -125,21 +125,21 @@ device::device(uint16_t device_num, uint16_t port_num)
   open_device(devices.at(device_num), port_num);
 }
 
-uint16_t device::port_num() { return port_num_; }
+uint16_t device::port_num() const { return port_num_; }
 
-uint16_t device::lid() { return port_attr_.lid; }
+uint16_t device::lid() const { return port_attr_.lid; }
 
-bool device::is_compare_and_swap_supported() {
+bool device::is_compare_and_swap_supported() const {
   return device_attr_ex_.orig_attr.atomic_cap != IBV_ATOMIC_NONE;
 }
 
-bool device::is_fetch_and_add_supported() {
+bool device::is_fetch_and_add_supported() const {
   return device_attr_ex_.orig_attr.atomic_cap != IBV_ATOMIC_NONE;
 }
 
 device::~device() {
-  if (ctx_) {
-    if (auto rc = ::ibv_close_device(ctx_); rc != 0) {
+  if (ctx_) [[unlikely]] {
+    if (auto rc = ::ibv_close_device(ctx_); rc != 0) [[unlikely]] {
       RDMAPP_LOG_ERROR("failed to close device lid=%d: %s", port_attr_.lid,
                        strerror(rc));
     } else {

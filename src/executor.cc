@@ -15,9 +15,9 @@ void executor::worker_fn(size_t worker_id) {
   try {
     while (true) {
       auto wc = work_queue_.pop();
-      auto cb_ptr = reinterpret_cast<callback_ptr>(wc.wr_id);
-      (*cb_ptr)(wc);
-      delete cb_ptr;
+      auto cb = reinterpret_cast<callback_ptr>(wc.wr_id);
+      (*cb)(wc);
+      destroy_callback(cb);
     }
   } catch (work_queue::queue_closed_error &) {
     RDMAPP_LOG_TRACE("executor worker %lu exited", worker_id);
@@ -27,6 +27,8 @@ void executor::worker_fn(size_t worker_id) {
 void executor::process_wc(struct ibv_wc const &wc) { work_queue_.push(wc); }
 
 void executor::shutdown() { work_queue_.close(); }
+
+void executor::destroy_callback(callback_ptr cb) { delete cb; }
 
 executor::~executor() {
   shutdown();

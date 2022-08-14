@@ -1,6 +1,7 @@
 #include "rdmapp/mr.h"
 
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 #include <infiniband/verbs.h>
@@ -12,9 +13,8 @@ namespace rdmapp {
 
 local_mr::mr(std::shared_ptr<pd> pd, struct ibv_mr *mr) : pd_(pd), mr_(mr) {}
 
-local_mr::mr(local_mr &&other) : mr_(other.mr_), pd_(std::move(other.pd_)) {
-  other.mr_ = nullptr;
-}
+local_mr::mr(local_mr &&other)
+    : mr_(std::exchange(other.mr_, nullptr)), pd_(std::move(other.pd_)) {}
 
 local_mr &local_mr::operator=(local_mr &&other) {
   mr_ = other.mr_;
@@ -24,10 +24,12 @@ local_mr &local_mr::operator=(local_mr &&other) {
 }
 
 local_mr::~mr() {
-  if (!mr_)
+  if (!mr_) {
+    // This mr is moved.
     return;
+  }
   auto addr = mr_->addr;
-  if (auto rc = ::ibv_dereg_mr(mr_); rc != 0) {
+  if (auto rc = ::ibv_dereg_mr(mr_); rc != 0) [[unlikely]] {
     RDMAPP_LOG_ERROR("failed to dereg mr %p addr=%p", mr_, addr);
   } else {
     RDMAPP_LOG_TRACE("dereg mr %p addr=%p", mr_, addr);

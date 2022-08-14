@@ -21,7 +21,7 @@ cq::cq(std::shared_ptr<device> device, size_t nr_cqe) : device_(device) {
 }
 
 bool cq::poll(struct ibv_wc &wc) {
-  if (auto rc = ::ibv_poll_cq(cq_, 1, &wc); rc < 0) {
+  if (auto rc = ::ibv_poll_cq(cq_, 1, &wc); rc < 0) [[unlikely]] {
     check_rc(-rc, "failed to poll cq");
   } else if (rc == 0) {
     return false;
@@ -37,7 +37,7 @@ size_t cq::poll(std::vector<struct ibv_wc> &wc_vec) {
 
 cq::~cq() {
   if (cq_ != nullptr) {
-    if (auto rc = ::ibv_destroy_cq(cq_); rc != 0) {
+    if (auto rc = ::ibv_destroy_cq(cq_); rc != 0) [[unlikely]] {
       RDMAPP_LOG_ERROR("failed to destroy cq %p: %s", cq_, strerror(errno));
     } else {
       RDMAPP_LOG_TRACE("destroyed cq: %p", cq_);

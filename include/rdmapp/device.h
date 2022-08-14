@@ -10,6 +10,10 @@
 
 namespace rdmapp {
 
+/**
+ * @brief This class holds a list of devices available on the system.
+ *
+ */
 class device_list : public noncopyable {
   struct ibv_device **devices_;
   int32_t nr_devices_;
@@ -37,6 +41,10 @@ public:
   ~device_list();
 };
 
+/**
+ * @brief This class is an abstraction of an Infiniband device.
+ *
+ */
 class device : public noncopyable {
   struct ibv_device *device_;
   struct ibv_context *ctx_;
@@ -51,13 +59,60 @@ class device : public noncopyable {
   void open_device(struct ibv_device *target, uint16_t port_num);
 
 public:
+  /**
+   * @brief Construct a new device object.
+   *
+   * @param target The target device.
+   * @param port_num The port number of the target device.
+   */
   device(struct ibv_device *target, uint16_t port_num = 1);
+
+  /**
+   * @brief Construct a new device object.
+   *
+   * @param device_name The name of the target device.
+   * @param port_num The port number of the target device.
+   */
   device(std::string const &device_name, uint16_t port_num = 1);
+
+  /**
+   * @brief Construct a new device object.
+   *
+   * @param device_num The index of the target device.
+   * @param port_num The port number of the target device.
+   */
   device(uint16_t device_num = 0, uint16_t port_num = 1);
-  uint16_t port_num();
-  uint16_t lid();
-  bool is_fetch_and_add_supported();
-  bool is_compare_and_swap_supported();
+
+  /**
+   * @brief Get the device port number.
+   *
+   * @return uint16_t The port number.
+   */
+  uint16_t port_num() const;
+
+  /**
+   * @brief Get the lid of the device.
+   *
+   * @return uint16_t The lid.
+   */
+  uint16_t lid() const;
+
+  /**
+   * @brief Checks if the device supports fetch and add.
+   *
+   * @return true Supported.
+   * @return false Not supported.
+   */
+  bool is_fetch_and_add_supported() const;
+
+  /**
+   * @brief Checks if the device supports compare and swap.
+   *
+   * @return true Supported.
+   * @return false Not supported.
+   */
+  bool is_compare_and_swap_supported() const;
+
   ~device();
 };
 

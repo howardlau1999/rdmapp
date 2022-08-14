@@ -23,14 +23,14 @@ static inline void throw_with(const char *format, Args... args) {
 }
 
 static inline void check_rc(int rc, const char *message) {
-  if (rc != 0) {
+  if (rc != 0) [[unlikely]] {
     throw_with("%s: %s (rc=%d)", message, strerror(rc), rc);
   }
 }
 
 static inline void check_wc_status(enum ibv_wc_status status,
                                    const char *message) {
-  if (status != IBV_WC_SUCCESS) {
+  if (status != IBV_WC_SUCCESS) [[unlikely]] {
     auto errorstr = [status]() {
       switch (status) {
       case IBV_WC_SUCCESS:
@@ -88,13 +88,13 @@ static inline void check_wc_status(enum ibv_wc_status status,
   }
 }
 static inline void check_ptr(void *ptr, const char *message) {
-  if (ptr == nullptr) {
+  if (ptr == nullptr) [[unlikely]] {
     throw_with("%s: %s (errno=%d)", message, strerror(errno), errno);
   }
 }
 
 static inline void check_errno(int rc, const char *message) {
-  if (rc < 0) {
+  if (rc < 0) [[unlikely]] {
     throw_with("%s: %s (errno=%d)", message, strerror(errno), errno);
   }
 }

@@ -26,7 +26,7 @@ srq::srq(std::shared_ptr<pd> pd, size_t max_wr) : pd_(pd), srq_(nullptr) {
 
 srq::~srq() {
   if (srq_ != nullptr) {
-    if (auto rc = ::ibv_destroy_srq(srq_); rc != 0) {
+    if (auto rc = ::ibv_destroy_srq(srq_); rc != 0) [[unlikely]] {
       RDMAPP_LOG_ERROR("failed to destroy srq %p: %s (rc=%d)", srq_,
                        strerror(rc), rc);
     } else {
