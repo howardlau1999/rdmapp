@@ -9,6 +9,10 @@
 namespace rdmapp {
 namespace socket {
 
+/**
+ * @brief This class is used to listen for incoming TCP connections.
+ *
+ */
 class tcp_listener : public noncopyable {
   std::shared_ptr<channel> channel_;
 

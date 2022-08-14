@@ -9,6 +9,10 @@
 
 namespace rdmapp {
 
+/**
+ * @brief This class is used to execute callbacks of completion entries.
+ *
+ */
 class executor {
   using work_queue = detail::blocking_queue<struct ibv_wc>;
   std::vector<std::thread> workers_;

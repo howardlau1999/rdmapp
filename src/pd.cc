@@ -21,12 +21,6 @@ pd::pd(std::shared_ptr<rdmapp::device> device) : device_(device) {
 
 std::shared_ptr<device> pd::device_ptr() const { return device_; }
 
-local_mr pd::reg_mr(void *buffer, size_t length) {
-  return reg_mr(buffer, length,
-                IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE |
-                    IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_ATOMIC);
-}
-
 local_mr pd::reg_mr(void *buffer, size_t length, int flags) {
   auto mr = ::ibv_reg_mr(pd_, buffer, length, flags);
   check_ptr(mr, "failed to reg mr");

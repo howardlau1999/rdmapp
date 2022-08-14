@@ -10,6 +10,10 @@
 namespace rdmapp {
 namespace socket {
 
+/**
+ * @brief This class represents an established TCP connection.
+ *
+ */
 class tcp_connection {
   std::shared_ptr<channel> channel_;
 

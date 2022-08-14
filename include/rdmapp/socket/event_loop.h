@@ -12,6 +12,10 @@
 namespace rdmapp {
 namespace socket {
 
+/**
+ * @brief This class is a loop the drives asynchronous I/O.
+ *
+ */
 class event_loop {
   int epoll_fd_;
   int close_event_fd_;
