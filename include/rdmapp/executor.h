@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <thread>
 #include <vector>
 
 #include <infiniband/verbs.h>
