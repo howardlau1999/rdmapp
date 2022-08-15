@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-[Documentation](https://liuhaohua.com/rdmapp/annotated.html) | [Examples](./examples)
+[Documentation](https://liuhaohua.com/rdmapp/) | [Examples](https://liuhaohua.com/rdmapp/examples.html)
 
 This library encapsulates the details of building IB queue pairs and provides a user-friendly modern C++ interface, featuring coroutines.
 
