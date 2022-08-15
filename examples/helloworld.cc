@@ -34,6 +34,7 @@ rdmapp::task<void> handle_qp(std::shared_ptr<rdmapp::qp> qp) {
   std::cout << "Written by client (imm=" << imm.value() << "): " << buffer
             << std::endl;
 
+  /* Atomic */
   uint64_t counter = 42;
   auto counter_mr = std::make_shared<rdmapp::local_mr>(
       qp->pd_ptr()->reg_mr(&counter, sizeof(counter)));
@@ -83,6 +84,7 @@ rdmapp::task<void> client(rdmapp::connector &connector) {
   std::copy_n("world", sizeof(buffer), buffer);
   co_await qp->write_with_imm(remote_mr, buffer, sizeof(buffer), 1);
 
+  /* Atomic Fetch-and-Add (FA)/Compare-and-Swap (CS) */
   char counter_mr_serialized[rdmapp::remote_mr::kSerializedSize];
   co_await qp->recv(counter_mr_serialized, sizeof(counter_mr_serialized));
   auto counter_mr = rdmapp::remote_mr::deserialize(counter_mr_serialized);

@@ -511,3 +511,9 @@ private:
  * This is an example of how to create a Queue Pair connected with a remote peer
  * and perform send/recv/read/write/atomic operations on the QP.
  */
+
+/** \example send_bw.cc
+ * This is an example of testing the bandwidth of a Queue Pair using send/recv.
+ * It also demonstrates how to run multiple tasks in background concurrently and
+ * wait for them to complete.
+ */
