@@ -111,17 +111,11 @@ int main(int argc, char *argv[]) {
   if (argc == 2) {
     rdmapp::acceptor acceptor(loop, std::stoi(argv[1]), pd, cq);
     auto coro = server(acceptor);
-    coro.get_future().wait();
-    if (auto exception = coro.get_exception()) {
-      std::rethrow_exception(exception);
-    }
+    coro.get_future().get();
   } else if (argc == 3) {
     rdmapp::connector connector(loop, argv[1], std::stoi(argv[2]), pd, cq);
     auto coro = client(connector);
-    coro.get_future().wait();
-    if (auto exception = coro.get_exception()) {
-      std::rethrow_exception(exception);
-    }
+    coro.get_future().get();
   } else {
     std::cout << "Usage: " << argv[0] << " [port] for server and " << argv[0]
               << " [server_ip] [port] for client" << std::endl;

@@ -46,10 +46,7 @@ int main() {
   // ...
   rdmapp::acceptor acceptor(pd, cq, loop, 2333);
   auto coro = server(acceptor);
-  coro.get_future().wait();
-  if (auto exception = coro.get_exception()) {
-    std::rethrow_exception(exception);
-  }
+  coro.get_future().get();
 }
 ```
 
@@ -72,10 +69,7 @@ int main(int argc, char *argv[]) {
   // ...
   rdmapp::connector connector(loop, "127.0.0.1", 2333, pd, cq);
   auto coro = client(connector);
-  coro.get_future().wait();
-  if (auto exception = coro.get_exception()) {
-    std::rethrow_exception(exception);
-  }
+  coro.get_future().get();
 }
 ```
 
