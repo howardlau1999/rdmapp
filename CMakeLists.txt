@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.3 FATAL_ERROR)
 project(rdmapp)
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 20 REQUIRED)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(Threads REQUIRED)
@@ -8,7 +8,7 @@ find_package(ibverbs REQUIRED)
 
 if (NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RelWithDebInfo)
-endif()
+endif ()
 
 string(LENGTH "${CMAKE_SOURCE_DIR}/" SOURCE_PATH_LENGTH)
 add_definitions("-DSOURCE_PATH_LENGTH=${SOURCE_PATH_LENGTH}")
@@ -62,22 +62,40 @@ set(RDMAPP_SOURCE_FILES
   src/mr.cc
 )
 
+set(RDMAPP_LINK_LIBRARIES ibverbs Threads::Threads)
+
 add_library(rdmapp STATIC ${RDMAPP_SOURCE_FILES})
-target_link_libraries(rdmapp ibverbs Threads::Threads)
+
+if (CMAKE_CXX_COMPILER_ID MATCHES Clang)
+  target_compile_options(rdmapp
+    PUBLIC
+    -stdlib=libc++
+    -fcoroutines-ts
+  )
+elseif (CMAKE_CXX_COMPILER_ID MATCHES GNU)
+  if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "11") 
+    target_compile_options(rdmapp
+      PUBLIC
+      -fcoroutines
+    )
+  endif ()
+endif ()
+
+target_link_libraries(rdmapp ${RDMAPP_LINK_LIBRARIES})
 
 find_program(iwyu_path NAMES include-what-you-use iwyu)
 if (iwyu_path)
   message("-- Using include-what-you-use ${iwyu_path}")
   set_property(TARGET rdmapp PROPERTY CXX_INCLUDE_WHAT_YOU_USE ${iwyu_path})
-endif()
+endif ()
 
 if (RDMAPP_BUILD_EXAMPLES)
   set(RDMAPP_EXAMPLES helloworld send_bw)
-  foreach(EXAMPLE IN LISTS RDMAPP_EXAMPLES)
+  foreach (EXAMPLE IN LISTS RDMAPP_EXAMPLES)
     add_executable(${EXAMPLE} examples/${EXAMPLE}.cc)
     target_link_libraries(${EXAMPLE} rdmapp) 
-  endforeach()
-endif()
+  endforeach ()
+endif ()
 
 include(GNUInstallDirs)
 install(TARGETS rdmapp EXPORT rdmapp ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
