@@ -6,6 +6,8 @@
 
 This library encapsulates the details of building IB queue pairs and provides a user-friendly modern C++ interface, featuring coroutines.
 
+Requires C++ 20 (i.e. gcc 10 or later).
+
 ## Quick Example
 
 Initialize the device, create a protection domain and create a completion queue with a corresponding poller, plus an event loop for QP exchanges with sockets:
