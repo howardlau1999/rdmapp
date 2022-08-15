@@ -506,3 +506,8 @@ private:
 };
 
 } // namespace rdmapp
+
+/** \example helloworld.cc
+ * This is an example of how to create a Queue Pair connected with a remote peer
+ * and perform send/recv/read/write/atomic operations on the QP.
+ */
