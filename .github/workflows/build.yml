@@ -11,12 +11,15 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-latest, ubuntu-20.04]
+        os: [ubuntu-22.04, ubuntu-20.04]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
       - name: Install ibverbs development headers and libraries
         run: sudo apt update && sudo apt install -y libibverbs-dev ninja-build
+      - name: Setup gcc 10 as default
+        if: ${{ matrix.os == 'ubuntu-20.04' }}
+        run: sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-10 100 --slave /usr/bin/g++ g++ /usr/bin/g++-10 --slave /usr/bin/gcov gcov /usr/bin/gcov-10
       - name: Configure
         run: cmake -GNinja -Bbuild .
       - name: Build
