@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install ibverbs development headers and libraries
-        run: sudo apt update && sudo apt install -y libibverbs-dev
+        run: sudo apt update && sudo apt install -y libibverbs-dev ninja-build
       - name: Configure
         run: cmake -GNinja -Bbuild .
       - name: Build
