@@ -1,0 +1,23 @@
+name: Build
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-20.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install ibverbs development headers and libraries
+        run: sudo apt update && sudo apt install -y libibverbs-dev
+      - name: Configure
+        run: cmake -GNinja -Bbuild .
+      - name: Build
+        run: cmake --build build
