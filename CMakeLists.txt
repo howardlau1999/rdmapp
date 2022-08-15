@@ -8,7 +8,7 @@ find_package(ibverbs REQUIRED)
 
 if (NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE RelWithDebInfo)
-endif()
+endif ()
 
 string(LENGTH "${CMAKE_SOURCE_DIR}/" SOURCE_PATH_LENGTH)
 add_definitions("-DSOURCE_PATH_LENGTH=${SOURCE_PATH_LENGTH}")
@@ -73,11 +73,14 @@ if (CMAKE_CXX_COMPILER_ID MATCHES Clang)
     -fcoroutines-ts
   )
 elseif (CMAKE_CXX_COMPILER_ID MATCHES GNU)
-  target_compile_options(rdmapp
-  PUBLIC
-    -fcoroutines
-  )
+  if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "11") 
+    target_compile_options(rdmapp
+      PUBLIC
+      -fcoroutines
+    )
+  endif ()
 endif ()
+
 target_link_libraries(rdmapp ${RDMAPP_LINK_LIBRARIES})
 
 find_program(iwyu_path NAMES include-what-you-use iwyu)
@@ -88,10 +91,10 @@ endif ()
 
 if (RDMAPP_BUILD_EXAMPLES)
   set(RDMAPP_EXAMPLES helloworld send_bw)
-  foreach(EXAMPLE IN LISTS RDMAPP_EXAMPLES)
+  foreach (EXAMPLE IN LISTS RDMAPP_EXAMPLES)
     add_executable(${EXAMPLE} examples/${EXAMPLE}.cc)
     target_link_libraries(${EXAMPLE} rdmapp) 
-  endforeach()
+  endforeach ()
 endif ()
 
 include(GNUInstallDirs)
