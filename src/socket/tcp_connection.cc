@@ -4,6 +4,7 @@
 #include <memory>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <unistd.h>
 
 #include "rdmapp/error.h"
 #include "rdmapp/socket/channel.h"
