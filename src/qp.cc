@@ -13,9 +13,11 @@
 #include <memory>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <optional>
 #include <stdexcept>
 #include <strings.h>
 #include <sys/socket.h>
+#include <utility>
 #include <vector>
 
 #include <infiniband/verbs.h>
@@ -384,11 +386,12 @@ constexpr bool qp::send_awaitable::is_atomic() const {
          opcode_ == IBV_WR_ATOMIC_FETCH_AND_ADD;
 }
 
-void qp::send_awaitable::await_resume() const {
+uint32_t qp::send_awaitable::await_resume() const {
   if (exception_) [[unlikely]] {
     std::rethrow_exception(exception_);
   }
   check_wc_status(wc_.status, "failed to send");
+  return wc_.byte_len;
 }
 
 qp::send_awaitable qp::send(void *buffer, size_t length) {
@@ -505,15 +508,16 @@ bool qp::recv_awaitable::await_suspend(std::coroutine_handle<> h) noexcept {
   return true;
 }
 
-std::optional<uint32_t> qp::recv_awaitable::await_resume() const {
+std::pair<uint32_t, std::optional<uint32_t>>
+qp::recv_awaitable::await_resume() const {
   if (exception_) [[unlikely]] {
     std::rethrow_exception(exception_);
   }
   check_wc_status(wc_.status, "failed to recv");
   if (wc_.wc_flags & IBV_WC_WITH_IMM) {
-    return wc_.imm_data;
+    return std::make_pair(wc_.byte_len, wc_.imm_data);
   }
-  return std::nullopt;
+  return std::make_pair(wc_.byte_len, std::nullopt);
 }
 
 qp::recv_awaitable qp::recv(void *buffer, size_t length) {

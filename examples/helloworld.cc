@@ -29,7 +29,7 @@ rdmapp::task<void> handle_qp(std::shared_ptr<rdmapp::qp> qp) {
   std::cout << "Sent mr addr=" << local_mr->addr()
             << " length=" << local_mr->length() << " rkey=" << local_mr->rkey()
             << " to client" << std::endl;
-  auto imm = co_await qp->recv(local_mr);
+  auto [_, imm] = co_await qp->recv(local_mr);
   assert(imm.has_value());
   std::cout << "Written by client (imm=" << imm.value() << "): " << buffer
             << std::endl;
@@ -43,10 +43,10 @@ rdmapp::task<void> handle_qp(std::shared_ptr<rdmapp::qp> qp) {
   std::cout << "Sent mr addr=" << counter_mr->addr()
             << " length=" << counter_mr->length()
             << " rkey=" << counter_mr->rkey() << " to client" << std::endl;
-  imm = co_await qp->recv(local_mr);
+  imm = (co_await qp->recv(local_mr)).second;
   assert(imm.has_value());
   std::cout << "Fetched and added by client: " << counter << std::endl;
-  imm = co_await qp->recv(local_mr);
+  imm = (co_await qp->recv(local_mr)).second;
   assert(imm.has_value());
   std::cout << "Compared and swapped by client: " << counter << std::endl;
 
@@ -66,8 +66,9 @@ rdmapp::task<void> client(rdmapp::connector &connector) {
   char buffer[6];
 
   /* Send/Recv */
-  co_await qp->recv(buffer, sizeof(buffer));
-  std::cout << "Received from server: " << buffer << std::endl;
+  auto [n, _] = co_await qp->recv(buffer, sizeof(buffer));
+  std::cout << "Received " << n << " bytes from server: " << buffer
+            << std::endl;
   std::copy_n("world", sizeof(buffer), buffer);
   co_await qp->send(buffer, sizeof(buffer));
   std::cout << "Sent to server: " << buffer << std::endl;
@@ -79,8 +80,8 @@ rdmapp::task<void> client(rdmapp::connector &connector) {
   std::cout << "Received mr addr=" << remote_mr.addr()
             << " length=" << remote_mr.length() << " rkey=" << remote_mr.rkey()
             << " from server" << std::endl;
-  co_await qp->read(remote_mr, buffer, sizeof(buffer));
-  std::cout << "Read from server: " << buffer << std::endl;
+  n = co_await qp->read(remote_mr, buffer, sizeof(buffer));
+  std::cout << "Read " << n << " bytes from server: " << buffer << std::endl;
   std::copy_n("world", sizeof(buffer), buffer);
   co_await qp->write_with_imm(remote_mr, buffer, sizeof(buffer), 1);
 

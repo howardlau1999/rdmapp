@@ -115,7 +115,7 @@ public:
                    uint64_t compare, uint64_t swap);
     bool await_ready() const noexcept;
     bool await_suspend(std::coroutine_handle<> h) noexcept;
-    void await_resume() const;
+    uint32_t await_resume() const;
     constexpr bool is_rdma() const;
     constexpr bool is_atomic() const;
   };
@@ -132,7 +132,7 @@ public:
     recv_awaitable(std::shared_ptr<qp> qp, void *buffer, size_t length);
     bool await_ready() const noexcept;
     bool await_suspend(std::coroutine_handle<> h) noexcept;
-    std::optional<uint32_t> await_resume() const;
+    std::pair<uint32_t, std::optional<uint32_t>> await_resume() const;
   };
 
   /**
@@ -257,7 +257,7 @@ public:
    *
    * @param buffer Pointer to local buffer. It should be valid until completion.
    * @param length The length of the local buffer.
-   * @return send_awaitable
+   * @return send_awaitable A coroutine returning length of the data sent.
    */
   [[nodiscard]] send_awaitable send(void *buffer, size_t length);
 
@@ -269,7 +269,7 @@ public:
    * @param remote_mr Remote memory region handle.
    * @param buffer Pointer to local buffer. It should be valid until completion.
    * @param length The length of the local buffer.
-   * @return send_awaitable
+   * @return send_awaitable A coroutine returning length of the data written.
    */
   [[nodiscard]] send_awaitable write(remote_mr const &remote_mr, void *buffer,
                                      size_t length);
@@ -283,7 +283,7 @@ public:
    * @param buffer Pointer to local buffer. It should be valid until completion.
    * @param length The length of the local buffer.
    * @param imm The immediate value.
-   * @return send_awaitable
+   * @return send_awaitable A coroutine returning length of the data written.
    */
   [[nodiscard]] send_awaitable write_with_imm(remote_mr const &remote_mr,
                                               void *buffer, size_t length,
@@ -297,7 +297,7 @@ public:
    * @param remote_mr Remote memory region handle.
    * @param buffer Pointer to local buffer. It should be valid until completion.
    * @param length The length of the local buffer.
-   * @return send_awaitable
+   * @return send_awaitable A coroutine returning length of the data read.
    */
   [[nodiscard]] send_awaitable read(remote_mr const &remote_mr, void *buffer,
                                     size_t length);
@@ -311,7 +311,7 @@ public:
    * @param buffer Pointer to local buffer. It should be valid until completion.
    * @param length The length of the local buffer.
    * @param add The delta.
-   * @return send_awaitable
+   * @return send_awaitable A coroutine returning length of the data sent.
    */
   [[nodiscard]] send_awaitable fetch_and_add(remote_mr const &remote_mr,
                                              void *buffer, size_t length,
@@ -327,7 +327,7 @@ public:
    * @param length The length of the local buffer.
    * @param compare The expected old value.
    * @param swap The desired new value.
-   * @return send_awaitable
+   * @return send_awaitable A coroutine returning length of the data sent.
    */
   [[nodiscard]] send_awaitable compare_and_swap(remote_mr const &remote_mr,
                                                 void *buffer, size_t length,
@@ -340,7 +340,9 @@ public:
    * memory region first and then deregistered upon completion.
    * @param buffer Pointer to local buffer. It should be valid until completion.
    * @param length The length of the local buffer.
-   * @return recv_awaitable
+   * @return recv_awaitable A coroutine returning std::pair<uint32_t,
+   * std::optional<uint32_t>>, with first indicating the length of received
+   * data, and second indicating the immediate value if any.
    */
   [[nodiscard]] recv_awaitable recv(void *buffer, size_t length);
 
@@ -349,7 +351,7 @@ public:
    *
    * @param local_mr Registered local memory region, whose lifetime is
    * controlled by a smart pointer.
-   * @return send_awaitable
+   * @return send_awaitable A coroutine returning length of the data sent.
    */
   [[nodiscard]] send_awaitable send(std::shared_ptr<local_mr> local_mr);
 
@@ -359,7 +361,7 @@ public:
    * @param remote_mr Remote memory region handle.
    * @param local_mr Registered local memory region, whose lifetime is
    * controlled by a smart pointer.
-   * @return send_awaitable
+   * @return send_awaitable A coroutine returning length of the data written.
    */
   [[nodiscard]] send_awaitable write(remote_mr const &remote_mr,
                                      std::shared_ptr<local_mr> local_mr);
@@ -372,7 +374,7 @@ public:
    * @param local_mr Registered local memory region, whose lifetime is
    * controlled by a smart pointer.
    * @param imm The immediate value.
-   * @return send_awaitable
+   * @return send_awaitable A coroutine returning length of the data sent.
    */
   [[nodiscard]] send_awaitable
   write_with_imm(remote_mr const &remote_mr, std::shared_ptr<local_mr> local_mr,
@@ -384,7 +386,7 @@ public:
    * @param remote_mr Remote memory region handle.
    * @param local_mr Registered local memory region, whose lifetime is
    * controlled by a smart pointer.
-   * @return send_awaitable
+   * @return send_awaitable A coroutine returning length of the data read.
    */
   [[nodiscard]] send_awaitable read(remote_mr const &remote_mr,
                                     std::shared_ptr<local_mr> local_mr);
@@ -397,7 +399,7 @@ public:
    * @param local_mr Registered local memory region, whose lifetime is
    * controlled by a smart pointer.
    * @param add The delta.
-   * @return send_awaitable
+   * @return send_awaitable A coroutine returning length of the data sent.
    */
   [[nodiscard]] send_awaitable fetch_and_add(remote_mr const &remote_mr,
                                              std::shared_ptr<local_mr> local_mr,
@@ -412,7 +414,7 @@ public:
    * controlled by a smart pointer.
    * @param compare The expected old value.
    * @param swap The desired new value.
-   * @return send_awaitable
+   * @return send_awaitable A coroutine returning length of the data sent.
    */
   [[nodiscard]] send_awaitable
   compare_and_swap(remote_mr const &remote_mr,
@@ -425,7 +427,9 @@ public:
    *
    * @param local_mr Registered local memory region, whose lifetime is
    * controlled by a smart pointer.
-   * @return recv_awaitable
+   * @return recv_awaitable A coroutine returning std::pair<uint32_t,
+   * std::optional<uint32_t>>, with first indicating the length of received
+   * data, and second indicating the immediate value if any.
    */
   [[nodiscard]] recv_awaitable recv(std::shared_ptr<local_mr> local_mr);
 
@@ -433,7 +437,7 @@ public:
    * @brief This function receives a Queue Pair from a remote peer.
    *
    * @param connection The TCP connection to the remote peer.
-   * @return task<deserialized_qp>
+   * @return task<deserialized_qp> A coroutine returning the deserialized QP.
    */
   static task<deserialized_qp> recv_qp(socket::tcp_connection &connection);
 
