@@ -89,10 +89,12 @@ template <class T> struct task : public noncopyable {
   }
   ~task() {
     if (!detached_) {
-      RDMAPP_LOG_TRACE("waiting coroutine %p", h_.address());
-      get_future().wait();
-      h_.destroy();
-      RDMAPP_LOG_TRACE("destroyed coroutine %p", h_.address());
+      if (!h_.done()) {
+        h_.promise().set_detached_task(h_);
+        get_future().wait();
+      } else {
+        h_.destroy();
+      }
     }
   }
   task(task &&) = default;
