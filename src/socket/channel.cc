@@ -36,13 +36,11 @@ void channel::set_nonblocking() { set_nonblocking(fd_); }
 void channel::writable_callback() {
   loop_->deregister(*this);
   writable_callback_();
-  writable_callback_ = noop_callback;
 }
 
 void channel::readable_callback() {
   loop_->deregister(*this);
   readable_callback_();
-  readable_callback_ = noop_callback;
 }
 
 void channel::wait_readable() {
