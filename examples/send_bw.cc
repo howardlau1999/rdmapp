@@ -13,7 +13,6 @@
 using namespace std::literals::chrono_literals;
 
 constexpr size_t kBufferSizeBytes = 2 * 1024 * 1024; // 2 MB
-constexpr size_t kQPCount = 1;
 constexpr size_t kWorkerCount = 4;
 constexpr size_t kSendCount = 8 * 1024;
 constexpr size_t kPrintInterval = 1024;
