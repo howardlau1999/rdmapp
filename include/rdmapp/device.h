@@ -16,7 +16,7 @@ namespace rdmapp {
  */
 class device_list : public noncopyable {
   struct ibv_device **devices_;
-  int32_t nr_devices_;
+  size_t nr_devices_;
 
 public:
   class iterator

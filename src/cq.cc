@@ -17,7 +17,7 @@ namespace rdmapp {
 cq::cq(std::shared_ptr<device> device, size_t nr_cqe) : device_(device) {
   cq_ = ::ibv_create_cq(device->ctx_, nr_cqe, this, nullptr, 0);
   check_ptr(cq_, "failed to create cq");
-  RDMAPP_LOG_TRACE("created cq: %p", cq_);
+  RDMAPP_LOG_TRACE("created cq: %p", reinterpret_cast<void *>(cq_));
 }
 
 bool cq::poll(struct ibv_wc &wc) {
@@ -41,9 +41,10 @@ cq::~cq() {
   }
 
   if (auto rc = ::ibv_destroy_cq(cq_); rc != 0) [[unlikely]] {
-    RDMAPP_LOG_ERROR("failed to destroy cq %p: %s", cq_, strerror(errno));
+    RDMAPP_LOG_ERROR("failed to destroy cq %p: %s",
+                     reinterpret_cast<void *>(cq_), strerror(errno));
   } else {
-    RDMAPP_LOG_TRACE("destroyed cq: %p", cq_);
+    RDMAPP_LOG_TRACE("destroyed cq: %p", reinterpret_cast<void *>(cq_));
   }
 }
 

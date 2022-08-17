@@ -16,8 +16,8 @@ cq_poller::cq_poller(std::shared_ptr<cq> cq, size_t batch_size)
 
 cq_poller::cq_poller(std::shared_ptr<cq> cq, std::shared_ptr<executor> executor,
                      size_t batch_size)
-    : cq_(cq), stopped_(false), executor_(executor), wc_vec_(batch_size),
-      poller_thread_(&cq_poller::worker, this) {}
+    : cq_(cq), stopped_(false), poller_thread_(&cq_poller::worker, this),
+      executor_(executor), wc_vec_(batch_size) {}
 
 cq_poller::~cq_poller() {
   stopped_ = true;

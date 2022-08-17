@@ -8,8 +8,8 @@ connector::connector(std::shared_ptr<socket::event_loop> loop,
                      std::string const &hostname, uint16_t port,
                      std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
                      std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq)
-    : loop_(loop), hostname_(hostname), port_(port), pd_(pd), recv_cq_(recv_cq),
-      send_cq_(send_cq), srq_(srq) {}
+    : pd_(pd), recv_cq_(recv_cq), send_cq_(send_cq), srq_(srq), loop_(loop),
+      hostname_(hostname), port_(port) {}
 
 connector::connector(std::shared_ptr<socket::event_loop> loop,
                      std::string const &hostname, uint16_t port,

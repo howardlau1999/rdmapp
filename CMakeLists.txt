@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.3 FATAL_ERROR)
 project(rdmapp)
 set(CMAKE_CXX_STANDARD 20)
 
+add_compile_options(-Wall -Wextra -pedantic -Werror)
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(Threads REQUIRED)
 find_package(ibverbs REQUIRED)

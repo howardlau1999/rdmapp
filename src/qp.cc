@@ -116,8 +116,9 @@ void qp::create() {
   qp_ = ::ibv_create_qp(pd_->pd_, &qp_init_attr);
   check_ptr(qp_, "failed to create qp");
   sq_psn_ = next_sq_psn.fetch_add(1);
-  RDMAPP_LOG_TRACE("created qp %p lid=%u qpn=%u psn=%u", qp_,
-                   pd_->device_ptr()->lid(), qp_->qp_num, sq_psn_);
+  RDMAPP_LOG_TRACE("created qp %p lid=%u qpn=%u psn=%u",
+                   reinterpret_cast<void *>(qp_), pd_->device_ptr()->lid(),
+                   qp_->qp_num, sq_psn_);
 }
 
 void qp::init() {
@@ -175,15 +176,16 @@ void qp::rts() {
 }
 
 task<deserialized_qp> qp::recv_qp(socket::tcp_connection &connection) {
-  int read = 0;
+  size_t header_read = 0;
   uint8_t header[deserialized_qp::qp_header::kSerializedSize];
-  while (read < deserialized_qp::qp_header::kSerializedSize) {
+  while (header_read < deserialized_qp::qp_header::kSerializedSize) {
     int n = co_await connection.recv(
-        &header[read], deserialized_qp::qp_header::kSerializedSize - read);
+        &header[header_read],
+        deserialized_qp::qp_header::kSerializedSize - header_read);
     if (n == 0) {
       throw_with("remote closed unexpectedly while receiving qp header");
     }
-    read += n;
+    header_read += n;
   }
 
   auto remote_qp = deserialized_qp::deserialize(header);
@@ -264,64 +266,64 @@ void qp::post_recv_srq(struct ibv_recv_wr const &recv_wr,
 
 qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp, void *buffer,
                                    size_t length, enum ibv_wr_opcode opcode)
-    : qp_(qp), local_mr_(std::make_shared<local_mr>(
-                   std::move(qp_->pd_->reg_mr(buffer, length)))),
-      wc_(), opcode_(opcode), remote_mr_() {}
+    : qp_(qp),
+      local_mr_(std::make_shared<local_mr>(qp_->pd_->reg_mr(buffer, length))),
+      remote_mr_(), wc_(), opcode_(opcode) {}
 qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp, void *buffer,
                                    size_t length, enum ibv_wr_opcode opcode,
                                    remote_mr const &remote_mr)
-    : qp_(qp), local_mr_(std::make_shared<local_mr>(
-                   std::move(qp_->pd_->reg_mr(buffer, length)))),
-      opcode_(opcode), remote_mr_(remote_mr) {}
+    : qp_(qp),
+      local_mr_(std::make_shared<local_mr>(qp_->pd_->reg_mr(buffer, length))),
+      remote_mr_(remote_mr), opcode_(opcode) {}
 qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp, void *buffer,
                                    size_t length, enum ibv_wr_opcode opcode,
                                    remote_mr const &remote_mr, uint32_t imm)
-    : qp_(qp), local_mr_(std::make_shared<local_mr>(
-                   std::move(qp_->pd_->reg_mr(buffer, length)))),
-      opcode_(opcode), remote_mr_(remote_mr), imm_(imm) {}
+    : qp_(qp),
+      local_mr_(std::make_shared<local_mr>(qp_->pd_->reg_mr(buffer, length))),
+      remote_mr_(remote_mr), imm_(imm), opcode_(opcode) {}
 qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp, void *buffer,
                                    size_t length, enum ibv_wr_opcode opcode,
                                    remote_mr const &remote_mr, uint64_t add)
-    : qp_(qp), local_mr_(std::make_shared<local_mr>(
-                   std::move(qp_->pd_->reg_mr(buffer, length)))),
-      opcode_(opcode), remote_mr_(remote_mr), compare_add_(add) {}
+    : qp_(qp),
+      local_mr_(std::make_shared<local_mr>(qp_->pd_->reg_mr(buffer, length))),
+      remote_mr_(remote_mr), compare_add_(add), opcode_(opcode) {}
 qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp, void *buffer,
                                    size_t length, enum ibv_wr_opcode opcode,
                                    remote_mr const &remote_mr, uint64_t compare,
                                    uint64_t swap)
-    : qp_(qp), local_mr_(std::make_shared<local_mr>(
-                   std::move(qp_->pd_->reg_mr(buffer, length)))),
-      opcode_(opcode), remote_mr_(remote_mr), compare_add_(compare),
-      swap_(swap) {}
+    : qp_(qp),
+      local_mr_(std::make_shared<local_mr>(qp_->pd_->reg_mr(buffer, length))),
+      remote_mr_(remote_mr), compare_add_(compare), swap_(swap),
+      opcode_(opcode) {}
 qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp,
                                    std::shared_ptr<local_mr> local_mr,
                                    enum ibv_wr_opcode opcode)
-    : qp_(qp), local_mr_(local_mr), wc_(), opcode_(opcode), remote_mr_() {}
+    : qp_(qp), local_mr_(local_mr), remote_mr_(), wc_(), opcode_(opcode) {}
 qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp,
                                    std::shared_ptr<local_mr> local_mr,
                                    enum ibv_wr_opcode opcode,
                                    remote_mr const &remote_mr)
-    : qp_(qp), local_mr_(local_mr), opcode_(opcode), remote_mr_(remote_mr) {}
+    : qp_(qp), local_mr_(local_mr), remote_mr_(remote_mr), opcode_(opcode) {}
 qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp,
                                    std::shared_ptr<local_mr> local_mr,
                                    enum ibv_wr_opcode opcode,
                                    remote_mr const &remote_mr, uint32_t imm)
-    : qp_(qp), local_mr_(local_mr), opcode_(opcode), remote_mr_(remote_mr),
-      imm_(imm) {}
+    : qp_(qp), local_mr_(local_mr), remote_mr_(remote_mr), imm_(imm),
+      opcode_(opcode) {}
 qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp,
                                    std::shared_ptr<local_mr> local_mr,
                                    enum ibv_wr_opcode opcode,
                                    remote_mr const &remote_mr, uint64_t add)
-    : qp_(qp), local_mr_(local_mr), opcode_(opcode), remote_mr_(remote_mr),
-      compare_add_(add) {}
+    : qp_(qp), local_mr_(local_mr), remote_mr_(remote_mr), compare_add_(add),
+      opcode_(opcode) {}
 qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp,
                                    std::shared_ptr<local_mr> local_mr,
                                    enum ibv_wr_opcode opcode,
                                    remote_mr const &remote_mr,
 
                                    uint64_t compare, uint64_t swap)
-    : qp_(qp), local_mr_(local_mr), opcode_(opcode), remote_mr_(remote_mr),
-      compare_add_(compare), swap_(swap) {}
+    : qp_(qp), local_mr_(local_mr), remote_mr_(remote_mr),
+      compare_add_(compare), swap_(swap), opcode_(opcode) {}
 
 static inline struct ibv_sge fill_local_sge(local_mr const &mr) {
   struct ibv_sge sge = {};
@@ -475,8 +477,8 @@ qp::send_awaitable qp::compare_and_swap(remote_mr const &remote_mr,
 
 qp::recv_awaitable::recv_awaitable(std::shared_ptr<qp> qp, void *buffer,
                                    size_t length)
-    : qp_(qp), local_mr_(std::make_shared<local_mr>(
-                   std::move(qp_->pd_->reg_mr(buffer, length)))),
+    : qp_(qp),
+      local_mr_(std::make_shared<local_mr>(qp_->pd_->reg_mr(buffer, length))),
       wc_() {}
 qp::recv_awaitable::recv_awaitable(std::shared_ptr<qp> qp,
                                    std::shared_ptr<local_mr> local_mr)
@@ -534,9 +536,10 @@ qp::~qp() {
   }
 
   if (auto rc = ::ibv_destroy_qp(qp_); rc != 0) [[unlikely]] {
-    RDMAPP_LOG_ERROR("failed to destroy qp %p: %s", qp_, strerror(errno));
+    RDMAPP_LOG_ERROR("failed to destroy qp %p: %s",
+                     reinterpret_cast<void *>(qp_), strerror(errno));
   } else {
-    RDMAPP_LOG_TRACE("destroyed qp %p", qp_);
+    RDMAPP_LOG_TRACE("destroyed qp %p", reinterpret_cast<void *>(qp_));
   }
 }
 

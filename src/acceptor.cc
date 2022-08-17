@@ -48,8 +48,8 @@ acceptor::acceptor(std::shared_ptr<socket::event_loop> loop,
                    std::string const &hostname, uint16_t port,
                    std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
                    std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq)
-    : pd_(pd), recv_cq_(recv_cq), send_cq_(send_cq), srq_(srq),
-      listener_(std::make_unique<socket::tcp_listener>(loop, hostname, port)) {}
+    : listener_(std::make_unique<socket::tcp_listener>(loop, hostname, port)),
+      pd_(pd), recv_cq_(recv_cq), send_cq_(send_cq), srq_(srq) {}
 
 task<std::shared_ptr<qp>> acceptor::accept() {
   auto channel = co_await listener_->accept();

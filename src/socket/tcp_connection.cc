@@ -29,7 +29,6 @@ tcp_connection::connect_awaitable::connect_awaitable(
     : rc_(-1) {
   struct addrinfo hints, *servinfo, *p;
   auto const port_str = std::to_string(port);
-  char s[INET6_ADDRSTRLEN];
   bzero(&hints, sizeof(hints));
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
@@ -100,8 +99,8 @@ tcp_connection::rw_awaitable tcp_connection::send(const void *buffer,
 tcp_connection::rw_awaitable::rw_awaitable(std::shared_ptr<channel> channel,
                                            bool write, void *buffer,
                                            size_t length)
-    : channel_(channel), write_(write), buffer_(buffer), length_(length),
-      n_(-1) {}
+    : channel_(channel), buffer_(buffer), n_(-1), length_(length),
+      write_(write) {}
 
 int tcp_connection::rw_awaitable::do_io() {
   int n = -1;

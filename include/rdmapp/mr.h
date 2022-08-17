@@ -166,7 +166,7 @@ public:
    */
   template <class It> static mr<tags::mr::remote> deserialize(It it) {
     mr<tags::mr::remote> remote_mr;
-    detail::deserialize(it, reinterpret_cast<uint64_t &>(remote_mr.addr_));
+    detail::deserialize(it, remote_mr.addr_);
     detail::deserialize(it, remote_mr.length_);
     detail::deserialize(it, remote_mr.rkey_);
     return remote_mr;

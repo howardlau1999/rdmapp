@@ -106,7 +106,8 @@ tcp_listener::tcp_listener(std::shared_ptr<event_loop> loop,
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = AI_PASSIVE;
 
-  if (auto rc = getaddrinfo(nullptr, port_str.c_str(), &hints, &servinfo);
+  if (auto rc =
+          getaddrinfo(hostname.c_str(), port_str.c_str(), &hints, &servinfo);
       rc != 0) {
     throw_with("getaddrinfo: %s", gai_strerror(rc));
   }
