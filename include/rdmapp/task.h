@@ -93,7 +93,7 @@ template <class T> struct task {
     }
   }
   task(task &&) = default;
-  task(coroutine_handle_type h) : h_(h) {}
+  task(coroutine_handle_type h) : h_(h), detached_(false) {}
   coroutine_handle_type h_;
   bool detached_;
   operator coroutine_handle_type() const { return h_; }
