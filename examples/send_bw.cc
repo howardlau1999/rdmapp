@@ -43,15 +43,15 @@ rdmapp::task<void> worker(size_t id, std::shared_ptr<rdmapp::qp> qp) {
 
 template <bool Client = false>
 rdmapp::task<void> handler(std::shared_ptr<rdmapp::qp> qp) {
-  std::vector<std::shared_future<void>> futures;
+  std::vector<std::future<void> *> futures;
   for (size_t i = 0; i < kWorkerCount; ++i) {
     auto task = worker<Client>(i, qp);
-    futures.emplace_back(task.get_future());
+    futures.emplace_back(&task.get_future());
     task.detach();
   }
   auto tik = std::chrono::high_resolution_clock::now();
-  for (auto &fut : futures) {
-    fut.get();
+  for (auto fut : futures) {
+    fut->get();
   }
   auto tok = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> seconds = tok - tik;
@@ -83,12 +83,10 @@ int main(int argc, char *argv[]) {
   auto looper = std::thread([loop]() { loop->loop(); });
   if (argc == 2) {
     rdmapp::acceptor acceptor(loop, std::stoi(argv[1]), pd, cq);
-    auto coro = server(acceptor);
-    coro.get_future().get();
+    server(acceptor);
   } else if (argc == 3) {
     rdmapp::connector connector(loop, argv[1], std::stoi(argv[2]), pd, cq);
-    auto coro = client(connector);
-    coro.get_future().get();
+    client(connector);
   } else {
     std::cout << "Usage: " << argv[0] << " [port] for server and " << argv[0]
               << " [server_ip] [port] for client" << std::endl;

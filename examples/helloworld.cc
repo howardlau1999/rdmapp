@@ -113,12 +113,10 @@ int main(int argc, char *argv[]) {
   auto looper = std::thread([loop]() { loop->loop(); });
   if (argc == 2) {
     rdmapp::acceptor acceptor(loop, std::stoi(argv[1]), pd, cq);
-    auto coro = server(acceptor);
-    coro.get_future().get();
+    server(acceptor);
   } else if (argc == 3) {
     rdmapp::connector connector(loop, argv[1], std::stoi(argv[2]), pd, cq);
-    auto coro = client(connector);
-    coro.get_future().get();
+    client(connector);
   } else {
     std::cout << "Usage: " << argv[0] << " [port] for server and " << argv[0]
               << " [server_ip] [port] for client" << std::endl;

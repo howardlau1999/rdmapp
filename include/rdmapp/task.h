@@ -51,21 +51,7 @@ struct promise_base : public value_returner<T> {
   std::coroutine_handle<> release_detached_;
 };
 
-template <class T> struct task_awaiter {
-  std::coroutine_handle<> h_;
-  std::coroutine_handle<> &continuation_;
-  std::shared_future<T> value_;
-  task_awaiter(std::coroutine_handle<> h, std::coroutine_handle<> &continuation,
-               std::shared_future<T> value)
-      : h_(h), continuation_(continuation), value_(value) {}
-  bool await_ready() { return h_.done(); }
-  auto await_suspend(std::coroutine_handle<> suspended) {
-    continuation_ = suspended;
-  }
-  auto await_resume() { return value_.get(); }
-};
-
-template <class T> struct task : public noncopyable {
+template <class T> struct task {
   struct promise_type
       : public promise_base<T, std::coroutine_handle<promise_type>> {
     task<T> get_return_object() {
@@ -74,19 +60,28 @@ template <class T> struct task : public noncopyable {
     void unhandled_exception() {
       this->promise_.set_exception(std::current_exception());
     }
-    promise_type() : future_(this->promise_.get_future().share()) {}
-    std::shared_future<T> get_future() { return future_; }
+    promise_type() : future_(this->promise_.get_future()) {}
+    std::future<T> &get_future() { return future_; }
     void set_detached_task(std::coroutine_handle<promise_type> h) {
       this->release_detached_ = h;
     }
-    std::shared_future<T> future_;
+    std::future<T> future_;
   };
+
+  struct task_awaiter {
+    std::coroutine_handle<promise_type> h_;
+    task_awaiter(std::coroutine_handle<promise_type> h) : h_(h) {}
+    bool await_ready() { return h_.done(); }
+    auto await_suspend(std::coroutine_handle<> suspended) {
+      h_.promise().continuation_ = suspended;
+    }
+    auto await_resume() { return h_.promise().future_.get(); }
+  };
+
   using coroutine_handle_type = std::coroutine_handle<promise_type>;
 
-  auto operator co_await() const {
-    return task_awaiter<T>(h_, h_.promise().continuation_,
-                           h_.promise().get_future());
-  }
+  auto operator co_await() const { return task_awaiter(h_); }
+
   ~task() {
     if (!detached_) {
       if (!h_.done()) {
@@ -102,7 +97,7 @@ template <class T> struct task : public noncopyable {
   coroutine_handle_type h_;
   bool detached_;
   operator coroutine_handle_type() const { return h_; }
-  std::shared_future<T> get_future() const { return h_.promise().get_future(); }
+  std::future<T> &get_future() const { return h_.promise().get_future(); }
   void detach() {
     assert(!detached_);
     h_.promise().set_detached_task(h_);
