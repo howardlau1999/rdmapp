@@ -35,14 +35,13 @@ struct promise_base : public value_returner<T> {
         if (suspended.promise().continuation_) {
           return suspended.promise().continuation_;
         } else {
+          if (release_detached_) {
+            release_detached_.destroy();
+          }
           return std::noop_coroutine();
         }
       }
-      void await_resume() noexcept {
-        if (release_detached_) {
-          release_detached_.destroy();
-        }
-      }
+      void await_resume() noexcept {}
     };
     return awaiter{release_detached_};
   }
