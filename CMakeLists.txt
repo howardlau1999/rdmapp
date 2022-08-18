@@ -92,7 +92,7 @@ if (iwyu_path)
 endif ()
 
 if (RDMAPP_BUILD_EXAMPLES)
-  set(RDMAPP_EXAMPLES helloworld send_bw)
+  set(RDMAPP_EXAMPLES helloworld send_bw write_bw)
   foreach (EXAMPLE IN LISTS RDMAPP_EXAMPLES)
     add_executable(${EXAMPLE} examples/${EXAMPLE}.cc)
     target_link_libraries(${EXAMPLE} rdmapp) 
