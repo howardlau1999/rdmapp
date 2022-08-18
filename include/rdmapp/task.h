@@ -91,7 +91,9 @@ template <class T> struct task {
       }
     }
   }
-  task(task &&) = default;
+  task(task &&other)
+      : h_(std::exchange(other.h_, nullptr)),
+        detached_(std::exchange(other.detached_, true)) {}
   task(coroutine_handle_type h) : h_(h), detached_(false) {}
   coroutine_handle_type h_;
   bool detached_;
