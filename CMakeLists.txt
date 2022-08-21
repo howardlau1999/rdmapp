@@ -114,6 +114,8 @@ if (RDMAPP_BUILD_EXAMPLES)
     examples/qp_transmission.cc
   )
   add_library(rdmapp_examples STATIC ${RDMAPP_EXAMPLES_LIB_SOURCE_FILES})
+  target_compile_options(rdmapp_examples ${RDMAPP_COMPILE_OPTIONS})
+  target_link_options(rdmapp_examples ${RDMAPP_LINK_OPTIONS})
   set(RDMAPP_EXAMPLES helloworld send_bw write_bw)
   foreach (EXAMPLE IN LISTS RDMAPP_EXAMPLES)
     add_executable(${EXAMPLE} examples/${EXAMPLE}.cc)
