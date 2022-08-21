@@ -78,14 +78,14 @@ list(APPEND
 )
 
 if (CMAKE_CXX_COMPILER_ID MATCHES Clang)
-  list(APPEND RDMAPP_COMPILE_OPTIONS rdmapp
+  list(APPEND RDMAPP_COMPILE_OPTIONS
     PUBLIC
     -stdlib=libc++
     -fcoroutines-ts
   )
 elseif (CMAKE_CXX_COMPILER_ID MATCHES GNU)
   if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "11") 
-    list(APPEND RDMAPP_COMPILE_OPTIONS rdmapp
+    list(APPEND RDMAPP_COMPILE_OPTIONS
       PUBLIC
       -fcoroutines
     )
