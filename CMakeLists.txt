@@ -62,21 +62,38 @@ set(RDMAPP_LINK_LIBRARIES ibverbs Threads::Threads)
 
 add_library(rdmapp STATIC ${RDMAPP_SOURCE_FILES})
 
+list(APPEND
+  RDMAPP_COMPILE_OPTIONS
+  PUBLIC
+  -flto
+  PUBLIC
+  -fno-rtti
+)
+list(APPEND
+  RDMAPP_LINK_OPTIONS
+  PUBLIC
+  -flto
+  PUBLIC
+  -fno-rtti
+)
+
 if (CMAKE_CXX_COMPILER_ID MATCHES Clang)
-  target_compile_options(rdmapp
+  list(APPEND RDMAPP_COMPILE_OPTIONS rdmapp
     PUBLIC
     -stdlib=libc++
     -fcoroutines-ts
   )
 elseif (CMAKE_CXX_COMPILER_ID MATCHES GNU)
   if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "11") 
-    target_compile_options(rdmapp
+    list(APPEND RDMAPP_COMPILE_OPTIONS rdmapp
       PUBLIC
       -fcoroutines
     )
   endif ()
 endif ()
 
+target_compile_options(rdmapp ${RDMAPP_COMPILE_OPTIONS})
+target_link_options(rdmapp ${RDMAPP_LINK_OPTIONS})
 target_link_libraries(rdmapp ${RDMAPP_LINK_LIBRARIES})
 
 find_program(iwyu_path NAMES include-what-you-use iwyu)
@@ -100,7 +117,8 @@ if (RDMAPP_BUILD_EXAMPLES)
   set(RDMAPP_EXAMPLES helloworld send_bw write_bw)
   foreach (EXAMPLE IN LISTS RDMAPP_EXAMPLES)
     add_executable(${EXAMPLE} examples/${EXAMPLE}.cc)
-    target_link_libraries(${EXAMPLE} rdmapp rdmapp_examples) 
+    target_link_libraries(${EXAMPLE} rdmapp rdmapp_examples)
+    target_compile_options(${EXAMPLE} ${RDMAPP_COMPILE_OPTIONS})
   endforeach ()
 endif ()
 
