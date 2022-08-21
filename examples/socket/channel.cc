@@ -1,5 +1,6 @@
-#include "rdmapp/socket/channel.h"
+#include "socket/channel.h"
 
+#include "socket/event_loop.h"
 #include <cassert>
 #include <cerrno>
 #include <cstring>
@@ -8,10 +9,8 @@
 #include <memory>
 #include <unistd.h>
 
-#include "rdmapp/error.h"
-#include "rdmapp/socket/event_loop.h"
-
-#include "rdmapp/detail/debug.h"
+#include <rdmapp/detail/debug.h>
+#include <rdmapp/error.h>
 
 namespace rdmapp {
 namespace socket {

@@ -1,13 +1,12 @@
 #pragma once
 
+#include "socket/channel.h"
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <shared_mutex>
 #include <sys/epoll.h>
 #include <unordered_map>
-
-#include "rdmapp/socket/channel.h"
 
 namespace rdmapp {
 namespace socket {

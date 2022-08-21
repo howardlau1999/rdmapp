@@ -14,7 +14,6 @@
 #include "rdmapp/cq.h"
 #include "rdmapp/device.h"
 #include "rdmapp/pd.h"
-#include "rdmapp/socket/tcp_connection.h"
 #include "rdmapp/srq.h"
 #include "rdmapp/task.h"
 
@@ -135,39 +134,6 @@ public:
     std::pair<uint32_t, std::optional<uint32_t>> await_resume() const;
   };
 
-  /**
-   * @brief This function is used to receive a Queue Pair from a remote peer.
-   *
-   * @param connection The TCP connection to the remote peer.
-   * @param pd The protection domain of the new Queue Pair.
-   * @param recv_cq The completion queue of recv work completions.
-   * @param send_cq The completion queue of send work completions.
-   * @param srq (Optional) If set, all recv work requests will be posted to this
-   * SRQ.
-   * @return task<std::shared_ptr<qp>> A coroutine that returns a shared pointer
-   * to the new Queue Pair.
-   */
-  static task<std::shared_ptr<qp>>
-  from_tcp_connection(socket::tcp_connection &connection,
-                      std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
-                      std::shared_ptr<cq> send_cq,
-                      std::shared_ptr<srq> srq = nullptr);
-
-  /**
-   * @brief This function is used to receive a Queue Pair from a remote peer.
-   *
-   * @param connection The TCP connection to the remote peer.
-   * @param pd The protection domain of the new Queue Pair.
-   * @param recv_cq The completion queue of both send and recv work completions.
-   * @param srq (Optional) If set, all recv work requests will be posted to this
-   * SRQ.
-   * @return task<std::shared_ptr<qp>> A coroutine that returns a shared pointer
-   * to the new Queue Pair.
-   */
-  static task<std::shared_ptr<qp>>
-  from_tcp_connection(socket::tcp_connection &connection,
-                      std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
-                      std::shared_ptr<srq> srq = nullptr);
   /**
    * @brief Construct a new qp object. The Queue Pair will be created with the
    * given remote Queue Pair parameters. Once constructed, the Queue Pair will
@@ -434,22 +400,6 @@ public:
   [[nodiscard]] recv_awaitable recv(std::shared_ptr<local_mr> local_mr);
 
   /**
-   * @brief This function receives a Queue Pair from a remote peer.
-   *
-   * @param connection The TCP connection to the remote peer.
-   * @return task<deserialized_qp> A coroutine returning the deserialized QP.
-   */
-  static task<deserialized_qp> recv_qp(socket::tcp_connection &connection);
-
-  /**
-   * @brief This function sends a Queue Pair to a remote peer.
-   *
-   * @param connection The TCP connection to the remote peer.
-   * @return task<void>
-   */
-  task<void> send_qp(socket::tcp_connection &connection);
-
-  /**
    * @brief This function serializes a Queue Pair prepared to be sent to a
    * buffer.
    *
@@ -474,7 +424,6 @@ public:
   std::shared_ptr<pd> pd_ptr() const;
   ~qp();
 
-private:
   /**
    * @brief This function transitions the Queue Pair to the RTR state.
    *
@@ -490,6 +439,7 @@ private:
    */
   void rts();
 
+private:
   /**
    * @brief This function posts a recv request on the Queue Pair's own RQ.
    *

@@ -1,11 +1,11 @@
 #pragma once
 
+#include "socket/channel.h"
 #include <cstdint>
 #include <memory>
 #include <netdb.h>
 
-#include "rdmapp/socket/channel.h"
-#include "rdmapp/task.h"
+#include <rdmapp/task.h>
 
 namespace rdmapp {
 namespace socket {

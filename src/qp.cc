@@ -45,27 +45,6 @@ qp::qp(uint16_t remote_lid, uint32_t remote_qpn, uint32_t remote_psn,
   rts();
 }
 
-task<std::shared_ptr<qp>>
-qp::from_tcp_connection(socket::tcp_connection &connection,
-                        std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
-                        std::shared_ptr<srq> srq) {
-  return from_tcp_connection(connection, pd, cq, cq, srq);
-}
-
-task<std::shared_ptr<qp>>
-qp::from_tcp_connection(socket::tcp_connection &connection,
-                        std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
-                        std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq) {
-  auto qp_ptr = std::make_shared<qp>(pd, recv_cq, send_cq, srq);
-  co_await qp_ptr->send_qp(connection);
-  auto remote_qp = co_await qp::recv_qp(connection);
-  qp_ptr->rtr(remote_qp.header.lid, remote_qp.header.qp_num,
-              remote_qp.header.sq_psn);
-  qp_ptr->user_data() = std::move(remote_qp.user_data);
-  qp_ptr->rts();
-  co_return qp_ptr;
-}
-
 qp::qp(std::shared_ptr<rdmapp::pd> pd, std::shared_ptr<cq> cq,
        std::shared_ptr<srq> srq)
     : qp(pd, cq, cq, srq) {}
@@ -173,62 +152,6 @@ void qp::rts() {
                                IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN |
                                IBV_QP_MAX_QP_RD_ATOMIC),
            "failed to transition qp to rts state");
-}
-
-task<deserialized_qp> qp::recv_qp(socket::tcp_connection &connection) {
-  size_t header_read = 0;
-  uint8_t header[deserialized_qp::qp_header::kSerializedSize];
-  while (header_read < deserialized_qp::qp_header::kSerializedSize) {
-    int n = co_await connection.recv(
-        &header[header_read],
-        deserialized_qp::qp_header::kSerializedSize - header_read);
-    if (n == 0) {
-      throw_with("remote closed unexpectedly while receiving qp header");
-    }
-    header_read += n;
-  }
-
-  auto remote_qp = deserialized_qp::deserialize(header);
-  RDMAPP_LOG_TRACE("received header lid=%u qpn=%u psn=%u user_data_size=%u",
-                   remote_qp.header.lid, remote_qp.header.qp_num,
-                   remote_qp.header.sq_psn, remote_qp.header.user_data_size);
-  remote_qp.user_data.resize(remote_qp.header.user_data_size);
-
-  if (remote_qp.header.user_data_size > 0) {
-    size_t user_data_read = 0;
-    remote_qp.user_data.resize(remote_qp.header.user_data_size, 0);
-    while (user_data_read < remote_qp.header.user_data_size) {
-      int n = co_await connection.recv(&remote_qp.user_data[user_data_read],
-                                       remote_qp.header.user_data_size -
-                                           user_data_read);
-      if (n == 0) {
-        throw_with("remote closed unexpectedly while receiving user data");
-      }
-      check_errno(n, "failed to receive user data");
-      user_data_read += n;
-    }
-  }
-  RDMAPP_LOG_TRACE("received user data");
-  co_return remote_qp;
-}
-
-task<void> qp::send_qp(socket::tcp_connection &connection) {
-  auto local_qp_data = serialize();
-  assert(local_qp_data.size() != 0);
-  size_t local_qp_sent = 0;
-  while (local_qp_sent < local_qp_data.size()) {
-    int n = co_await connection.send(&local_qp_data[local_qp_sent],
-                                     local_qp_data.size() - local_qp_sent);
-    if (n == 0) {
-      throw_with("remote closed unexpectedly while sending qp");
-    }
-    check_errno(n, "failed to send qp");
-    local_qp_sent += n;
-  }
-  RDMAPP_LOG_TRACE("sent qp lid=%u qpn=%u psn=%u user_data_size=%lu",
-                   pd_->device_ptr()->lid(), qp_->qp_num, sq_psn_,
-                   user_data_.size());
-  co_return;
 }
 
 void qp::post_send(struct ibv_send_wr const &send_wr,

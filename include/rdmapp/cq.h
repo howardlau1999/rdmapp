@@ -43,6 +43,7 @@ public:
    * completion queue.
    */
   bool poll(struct ibv_wc &wc);
+
   /**
    * @brief Poll the completion queue.
    *

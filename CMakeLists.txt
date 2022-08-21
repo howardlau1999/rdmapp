@@ -48,17 +48,11 @@ if (RDMAPP_BUILD_DOCS)
 endif ()
 
 set(RDMAPP_SOURCE_FILES
-  src/socket/event_loop.cc
-  src/socket/channel.cc
-  src/socket/tcp_connection.cc
-  src/socket/tcp_listener.cc
   src/device.cc
   src/pd.cc
   src/cq.cc
-  src/acceptor.cc
   src/qp.cc
   src/srq.cc
-  src/connector.cc
   src/cq_poller.cc
   src/executor.cc
   src/mr.cc
@@ -92,10 +86,21 @@ if (iwyu_path)
 endif ()
 
 if (RDMAPP_BUILD_EXAMPLES)
+  include_directories(examples/include)
+  set(RDMAPP_EXAMPLES_LIB_SOURCE_FILES 
+    examples/socket/event_loop.cc
+    examples/socket/channel.cc
+    examples/socket/tcp_connection.cc
+    examples/socket/tcp_listener.cc
+    examples/acceptor.cc
+    examples/connector.cc
+    examples/qp_transmission.cc
+  )
+  add_library(rdmapp_examples STATIC ${RDMAPP_EXAMPLES_LIB_SOURCE_FILES})
   set(RDMAPP_EXAMPLES helloworld send_bw write_bw)
   foreach (EXAMPLE IN LISTS RDMAPP_EXAMPLES)
     add_executable(${EXAMPLE} examples/${EXAMPLE}.cc)
-    target_link_libraries(${EXAMPLE} rdmapp) 
+    target_link_libraries(${EXAMPLE} rdmapp rdmapp_examples) 
   endforeach ()
 endif ()
 

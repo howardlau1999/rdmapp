@@ -1,15 +1,14 @@
-#include "rdmapp/socket/tcp_connection.h"
+#include "socket/tcp_connection.h"
 
+#include "socket/channel.h"
 #include <arpa/inet.h>
 #include <memory>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <unistd.h>
 
-#include "rdmapp/error.h"
-#include "rdmapp/socket/channel.h"
-
-#include "rdmapp/detail/debug.h"
+#include <rdmapp/detail/debug.h>
+#include <rdmapp/error.h>
 
 namespace rdmapp {
 namespace socket {
@@ -29,7 +28,7 @@ tcp_connection::connect_awaitable::connect_awaitable(
     : rc_(-1) {
   struct addrinfo hints, *servinfo, *p;
   auto const port_str = std::to_string(port);
-  bzero(&hints, sizeof(hints));
+  ::bzero(&hints, sizeof(hints));
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
   if (auto rc =

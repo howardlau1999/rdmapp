@@ -1,16 +1,10 @@
 #pragma once
 
-#include "rdmapp/acceptor.h"
-#include "rdmapp/connector.h"
 #include "rdmapp/cq.h"
 #include "rdmapp/cq_poller.h"
 #include "rdmapp/device.h"
 #include "rdmapp/error.h"
 #include "rdmapp/pd.h"
 #include "rdmapp/qp.h"
-#include "rdmapp/socket/channel.h"
-#include "rdmapp/socket/event_loop.h"
-#include "rdmapp/socket/tcp_connection.h"
-#include "rdmapp/socket/tcp_listener.h"
 #include "rdmapp/srq.h"
 #include "rdmapp/task.h"

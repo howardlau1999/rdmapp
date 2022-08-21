@@ -1,5 +1,6 @@
-#include "rdmapp/socket/tcp_listener.h"
+#include "socket/tcp_listener.h"
 
+#include "socket/channel.h"
 #include <arpa/inet.h>
 #include <cassert>
 #include <cerrno>
@@ -8,10 +9,8 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
-#include "rdmapp/error.h"
-#include "rdmapp/socket/channel.h"
-
-#include "rdmapp/detail/debug.h"
+#include <rdmapp/detail/debug.h>
+#include <rdmapp/error.h>
 
 namespace rdmapp {
 namespace socket {

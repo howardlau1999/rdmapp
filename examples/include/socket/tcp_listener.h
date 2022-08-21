@@ -1,10 +1,9 @@
 #pragma once
 
+#include "socket/event_loop.h"
 #include <memory>
 
-#include "rdmapp/socket/event_loop.h"
-
-#include "rdmapp/detail/noncopyable.h"
+#include <rdmapp/detail/noncopyable.h>
 
 namespace rdmapp {
 namespace socket {
