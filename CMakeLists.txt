@@ -2,8 +2,6 @@ cmake_minimum_required(VERSION 3.3 FATAL_ERROR)
 project(rdmapp)
 set(CMAKE_CXX_STANDARD 20)
 
-add_compile_options(-Wall -Wextra -pedantic -Werror)
-
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 find_package(Threads REQUIRED)
 find_package(ibverbs REQUIRED)
@@ -15,16 +13,9 @@ endif ()
 string(LENGTH "${CMAKE_SOURCE_DIR}/" SOURCE_PATH_LENGTH)
 add_definitions("-DSOURCE_PATH_LENGTH=${SOURCE_PATH_LENGTH}")
 
-include_directories(include)
-
 option(RDMAPP_BUILD_EXAMPLES "Build examples" ON)
 option(RDMAPP_BUILD_DOCS "Build docs" OFF)
 option(RDMAPP_ASAN "Build with AddressSanitizer" OFF)
-
-if (RDMAPP_ASAN)
-  add_compile_options(-fno-omit-frame-pointer -fsanitize=address)
-  add_link_options(-fno-omit-frame-pointer -fsanitize=address)
-endif ()
 
 if (RDMAPP_BUILD_DOCS)
   # check if Doxygen is installed
@@ -66,16 +57,24 @@ list(APPEND
   RDMAPP_COMPILE_OPTIONS
   PUBLIC
   -flto
-  PUBLIC
+  PRIVATE
   -fno-rtti
+  -Wall 
+  -Wextra 
+  -pedantic 
+  -Werror
 )
 list(APPEND
   RDMAPP_LINK_OPTIONS
   PUBLIC
   -flto
-  PUBLIC
+  PRIVATE
   -fno-rtti
 )
+if (RDMAPP_ASAN)
+  list(APPEND RDMAPP_COMPILE_OPTIONS PRIVATE -fno-omit-frame-pointer -fsanitize=address)
+  list(APPEND RDMAPP_LINK_OPTIONS -fno-omit-frame-pointer -fsanitize=address)
+endif ()
 
 if (CMAKE_CXX_COMPILER_ID MATCHES Clang)
   list(APPEND RDMAPP_COMPILE_OPTIONS
@@ -95,6 +94,7 @@ endif ()
 target_compile_options(rdmapp ${RDMAPP_COMPILE_OPTIONS})
 target_link_options(rdmapp ${RDMAPP_LINK_OPTIONS})
 target_link_libraries(rdmapp ${RDMAPP_LINK_LIBRARIES})
+target_include_directories(rdmapp PUBLIC include)
 
 find_program(iwyu_path NAMES include-what-you-use iwyu)
 if (iwyu_path)
@@ -103,7 +103,6 @@ if (iwyu_path)
 endif ()
 
 if (RDMAPP_BUILD_EXAMPLES)
-  include_directories(examples/include)
   set(RDMAPP_EXAMPLES_LIB_SOURCE_FILES 
     examples/socket/event_loop.cc
     examples/socket/channel.cc
@@ -115,11 +114,13 @@ if (RDMAPP_BUILD_EXAMPLES)
   )
   add_library(rdmapp_examples STATIC ${RDMAPP_EXAMPLES_LIB_SOURCE_FILES})
   target_compile_options(rdmapp_examples ${RDMAPP_COMPILE_OPTIONS})
+  target_include_directories(rdmapp_examples PUBLIC examples/include)
+  target_link_libraries(rdmapp_examples PUBLIC rdmapp)
   target_link_options(rdmapp_examples ${RDMAPP_LINK_OPTIONS})
   set(RDMAPP_EXAMPLES helloworld send_bw write_bw)
   foreach (EXAMPLE IN LISTS RDMAPP_EXAMPLES)
     add_executable(${EXAMPLE} examples/${EXAMPLE}.cc)
-    target_link_libraries(${EXAMPLE} rdmapp rdmapp_examples)
+    target_link_libraries(${EXAMPLE} rdmapp_examples)
     target_compile_options(${EXAMPLE} ${RDMAPP_COMPILE_OPTIONS})
   endforeach ()
 endif ()
