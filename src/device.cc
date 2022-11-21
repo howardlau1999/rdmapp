@@ -33,9 +33,7 @@ device_list::~device_list() {
 device_list::iterator::iterator(struct ibv_device **devices, size_t i)
     : i_(i), devices_(devices) {}
 
-struct ibv_device *&device_list::iterator::operator*() {
-  return devices_[i_];
-}
+struct ibv_device *&device_list::iterator::operator*() { return devices_[i_]; }
 
 bool device_list::iterator::operator==(
     device_list::iterator const &other) const {
