@@ -73,6 +73,8 @@ class qp : public noncopyable, public std::enable_shared_from_this<qp> {
    */
   void init();
 
+  void destroy();
+
 public:
   class send_awaitable {
     std::shared_ptr<qp> qp_;

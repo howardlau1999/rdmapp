@@ -108,11 +108,15 @@ void qp::init() {
   qp_attr.port_num = pd_->device_ptr()->port_num();
   qp_attr.qp_access_flags = IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ |
                             IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_ATOMIC;
-
-  check_rc(::ibv_modify_qp(qp_, &(qp_attr),
-                           IBV_QP_STATE | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS |
-                               IBV_QP_PKEY_INDEX),
-           "failed to transition qp to init state");
+  try {
+    check_rc(::ibv_modify_qp(qp_, &(qp_attr),
+                             IBV_QP_STATE | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS |
+                                 IBV_QP_PKEY_INDEX),
+             "failed to transition qp to init state");
+  } catch (const std::exception &e) {
+    destroy();
+    throw;
+  }
 }
 
 void qp::rtr(uint16_t remote_lid, uint32_t remote_qpn, uint32_t remote_psn) {
@@ -129,12 +133,18 @@ void qp::rtr(uint16_t remote_lid, uint32_t remote_qpn, uint32_t remote_psn) {
   qp_attr.ah_attr.sl = 0;
   qp_attr.ah_attr.src_path_bits = 0;
   qp_attr.ah_attr.port_num = pd_->device_ptr()->port_num();
-  check_rc(::ibv_modify_qp(qp_, &qp_attr,
-                           IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU |
-                               IBV_QP_DEST_QPN | IBV_QP_RQ_PSN |
-                               IBV_QP_MIN_RNR_TIMER |
-                               IBV_QP_MAX_DEST_RD_ATOMIC),
-           "failed to transition qp to rtr state");
+
+  try {
+    check_rc(::ibv_modify_qp(qp_, &qp_attr,
+                             IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU |
+                                 IBV_QP_DEST_QPN | IBV_QP_RQ_PSN |
+                                 IBV_QP_MIN_RNR_TIMER |
+                                 IBV_QP_MAX_DEST_RD_ATOMIC),
+             "failed to transition qp to rtr state");
+  } catch (const std::exception &e) {
+    destroy();
+    throw;
+  }
 }
 
 void qp::rts() {
@@ -147,11 +157,16 @@ void qp::rts() {
   qp_attr.max_rd_atomic = 1;
   qp_attr.sq_psn = sq_psn_;
 
-  check_rc(::ibv_modify_qp(qp_, &qp_attr,
-                           IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT |
-                               IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN |
-                               IBV_QP_MAX_QP_RD_ATOMIC),
-           "failed to transition qp to rts state");
+  try {
+    check_rc(::ibv_modify_qp(qp_, &qp_attr,
+                             IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT |
+                                 IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN |
+                                 IBV_QP_MAX_QP_RD_ATOMIC),
+             "failed to transition qp to rts state");
+  } catch (std::exception const &e) {
+    destroy();
+    throw;
+  }
 }
 
 void qp::post_send(struct ibv_send_wr const &send_wr,
@@ -453,7 +468,7 @@ qp::recv_awaitable qp::recv(std::shared_ptr<local_mr> local_mr) {
   return qp::recv_awaitable(this->shared_from_this(), local_mr);
 }
 
-qp::~qp() {
+void qp::destroy() {
   if (qp_ == nullptr) [[unlikely]] {
     return;
   }
@@ -465,5 +480,7 @@ qp::~qp() {
     RDMAPP_LOG_TRACE("destroyed qp %p", reinterpret_cast<void *>(qp_));
   }
 }
+
+qp::~qp() { destroy(); }
 
 } // namespace rdmapp
