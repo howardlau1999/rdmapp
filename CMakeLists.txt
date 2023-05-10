@@ -13,7 +13,11 @@ endif ()
 string(LENGTH "${CMAKE_SOURCE_DIR}/" SOURCE_PATH_LENGTH)
 add_definitions("-DSOURCE_PATH_LENGTH=${SOURCE_PATH_LENGTH}")
 
-option(RDMAPP_BUILD_EXAMPLES "Build examples" ON)
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  option(RDMAPP_BUILD_EXAMPLES "Build examples" ON)
+else()
+  option(RDMAPP_BUILD_EXAMPLES "Build examples" OFF)
+endif()
 option(RDMAPP_BUILD_DOCS "Build docs" OFF)
 option(RDMAPP_ASAN "Build with AddressSanitizer" OFF)
 
