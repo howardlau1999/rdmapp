@@ -1,14 +1,13 @@
 #pragma once
 
 #include <atomic>
+#include <coroutine>
 #include <cstdint>
 #include <exception>
-#include <iterator>
 #include <memory>
 #include <optional>
-#include <string_view>
-#include <vector>
 #include <utility>
+#include <vector>
 
 #include <infiniband/verbs.h>
 
@@ -16,7 +15,6 @@
 #include "rdmapp/device.h"
 #include "rdmapp/pd.h"
 #include "rdmapp/srq.h"
-#include "rdmapp/task.h"
 
 #include "rdmapp/detail/noncopyable.h"
 #include "rdmapp/detail/serdes.h"

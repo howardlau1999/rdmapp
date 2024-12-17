@@ -7,16 +7,13 @@
 #include <arpa/inet.h>
 #include <cerrno>
 #include <cstdint>
-#include <cstdio>
 #include <cstring>
 #include <memory>
 #include <netdb.h>
 #include <netinet/in.h>
-#include <stdexcept>
 #include <strings.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
-#include <thread>
 #include <unistd.h>
 #include <vector>
 

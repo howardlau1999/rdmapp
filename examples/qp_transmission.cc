@@ -1,5 +1,7 @@
 #include "qp_transmission.h"
 
+#include <rdmapp/detail/debug.h>
+
 namespace rdmapp {
 
 task<void> send_qp(qp const &qp, socket::tcp_connection &connection) {
