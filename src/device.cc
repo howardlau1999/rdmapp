@@ -148,9 +148,7 @@ bool device::is_fetch_and_add_supported() const {
   return device_attr_ex_.orig_attr.atomic_cap != IBV_ATOMIC_NONE;
 }
 
-int device::gid_index() const {
-  return gid_index_;
-}
+int device::gid_index() const { return gid_index_; }
 
 std::string device::gid_hex_string(union ibv_gid const &gid) {
   std::string gid_str;
@@ -169,11 +167,14 @@ device::~device() {
     return;
   }
 
+  auto const gid_str = gid_hex_string(gid_);
+
   if (auto rc = ::ibv_close_device(ctx_); rc != 0) [[unlikely]] {
-    RDMAPP_LOG_ERROR("failed to close device lid=%d: %s", port_attr_.lid,
-                     strerror(rc));
+    RDMAPP_LOG_ERROR("failed to close device gid=%s lid=%d: %s",
+                     gid_str.c_str(), port_attr_.lid, ::strerror(rc));
   } else {
-    RDMAPP_LOG_DEBUG("closed device lid=%d", port_attr_.lid);
+    RDMAPP_LOG_DEBUG("closed device gid=%s lid=%d", gid_str.c_str(),
+                     port_attr_.lid);
   }
 }
 
