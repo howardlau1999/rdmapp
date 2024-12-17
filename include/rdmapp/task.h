@@ -5,6 +5,7 @@
 #include <exception>
 #include <functional>
 #include <future>
+#include <utility>
 
 #include "rdmapp/detail/debug.h"
 #include "rdmapp/detail/noncopyable.h"
