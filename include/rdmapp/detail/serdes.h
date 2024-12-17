@@ -5,6 +5,7 @@
 #include <endian.h>
 #include <netinet/in.h>
 #include <type_traits>
+
 #include <infiniband/verbs.h>
 
 namespace rdmapp {

@@ -104,7 +104,7 @@ public:
    *
    * @return union ibv_gid The gid.
    */
-  union ibv_gid gid() const; 
+  union ibv_gid gid() const;
 
   /**
    * @brief Checks if the device supports fetch and add.
@@ -124,7 +124,7 @@ public:
 
   int gid_index() const;
 
-  static std::string gid_hex_string(union ibv_gid const& gid);
+  static std::string gid_hex_string(union ibv_gid const &gid);
 
   ~device();
 };
