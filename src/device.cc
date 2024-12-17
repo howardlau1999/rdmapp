@@ -82,6 +82,10 @@ void device::open_device(struct ibv_device *target, uint16_t port_num) {
   check_rc(::ibv_query_device_ex(ctx_, &query, &device_attr_ex_),
            "failed to query extended attributes");
 
+  gid_index_ = 0;
+  check_rc(::ibv_query_gid(ctx_, port_num, gid_index_, &gid_),
+           "failed to query gid");
+
   auto link_layer = [&]() {
     switch (port_attr_.link_layer) {
     case IBV_LINK_LAYER_ETHERNET:
@@ -91,8 +95,9 @@ void device::open_device(struct ibv_device *target, uint16_t port_num) {
     }
     return "unspecified";
   }();
-  RDMAPP_LOG_DEBUG("opened Infiniband device lid=%d link_layer=%s",
-                   port_attr_.lid, link_layer);
+  auto const gid_str = gid_hex_string(gid_);
+  RDMAPP_LOG_DEBUG("opened Infiniband device gid=%s lid=%d link_layer=%s",
+                   gid_str.c_str(), port_attr_.lid, link_layer);
 }
 
 device::device(struct ibv_device *target, uint16_t port_num) {
@@ -129,12 +134,34 @@ uint16_t device::port_num() const { return port_num_; }
 
 uint16_t device::lid() const { return port_attr_.lid; }
 
+union ibv_gid device::gid() const {
+  union ibv_gid gid_copied;
+  ::memcpy(&gid_copied, &gid_, sizeof(union ibv_gid));
+  return gid_copied;
+}
+
 bool device::is_compare_and_swap_supported() const {
   return device_attr_ex_.orig_attr.atomic_cap != IBV_ATOMIC_NONE;
 }
 
 bool device::is_fetch_and_add_supported() const {
   return device_attr_ex_.orig_attr.atomic_cap != IBV_ATOMIC_NONE;
+}
+
+int device::gid_index() const {
+  return gid_index_;
+}
+
+std::string device::gid_hex_string(union ibv_gid const &gid) {
+  std::string gid_str;
+  char buf[16] = {0};
+  const static size_t kGidLength = 16;
+  for (size_t i = 0; i < kGidLength; ++i) {
+    ::snprintf(buf, 16, "%02x", gid.raw[i]);
+    gid_str += i == 0 ? buf : std::string(":") + buf;
+  }
+
+  return gid_str;
 }
 
 device::~device() {

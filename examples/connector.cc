@@ -27,7 +27,7 @@ from_tcp_connection(socket::tcp_connection &connection, std::shared_ptr<pd> pd,
   co_await send_qp(*qp_ptr, connection);
   auto remote_qp = co_await recv_qp(connection);
   qp_ptr->rtr(remote_qp.header.lid, remote_qp.header.qp_num,
-              remote_qp.header.sq_psn);
+              remote_qp.header.sq_psn, remote_qp.header.gid);
   qp_ptr->user_data() = std::move(remote_qp.user_data);
   qp_ptr->rts();
   co_return qp_ptr;

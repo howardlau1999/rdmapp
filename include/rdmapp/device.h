@@ -50,7 +50,9 @@ class device : public noncopyable {
   struct ibv_context *ctx_;
   struct ibv_port_attr port_attr_;
   struct ibv_device_attr_ex device_attr_ex_;
+  union ibv_gid gid_;
 
+  int gid_index_;
   uint16_t port_num_;
   friend class pd;
   friend class cq;
@@ -98,6 +100,13 @@ public:
   uint16_t lid() const;
 
   /**
+   * @brief Get the gid of the device.
+   *
+   * @return union ibv_gid The gid.
+   */
+  union ibv_gid gid() const; 
+
+  /**
    * @brief Checks if the device supports fetch and add.
    *
    * @return true Supported.
@@ -112,6 +121,10 @@ public:
    * @return false Not supported.
    */
   bool is_compare_and_swap_supported() const;
+
+  int gid_index() const;
+
+  static std::string gid_hex_string(union ibv_gid const& gid);
 
   ~device();
 };

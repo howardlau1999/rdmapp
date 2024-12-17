@@ -5,6 +5,7 @@
 #include <endian.h>
 #include <netinet/in.h>
 #include <type_traits>
+#include <infiniband/verbs.h>
 
 namespace rdmapp {
 namespace detail {
@@ -29,6 +30,12 @@ serialize(T const &value, It &it) {
 }
 
 template <class T, class It>
+typename std::enable_if<std::is_same<T, union ibv_gid>::value>::type
+serialize(T const &value, It &it) {
+  std::copy_n(reinterpret_cast<uint8_t const *>(&value), sizeof(T), it);
+}
+
+template <class T, class It>
 typename std::enable_if<std::is_integral<T>::value>::type
 deserialize(It &it, T &value) {
   std::copy_n(it, sizeof(T), reinterpret_cast<uint8_t *>(&value));
@@ -42,6 +49,13 @@ deserialize(It &it, T &value) {
   std::copy_n(it, sizeof(T), reinterpret_cast<uint8_t *>(&value));
   it += sizeof(T);
   value = reinterpret_cast<void *>(ntoh(reinterpret_cast<uint64_t>(value)));
+}
+
+template <class T, class It>
+typename std::enable_if<std::is_same<T, union ibv_gid>::value>::type
+deserialize(It &it, T &value) {
+  std::copy_n(it, sizeof(T), reinterpret_cast<uint8_t *>(&value));
+  it += sizeof(T);
 }
 
 } // namespace detail

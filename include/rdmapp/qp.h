@@ -26,11 +26,12 @@ namespace rdmapp {
 struct deserialized_qp {
   struct qp_header {
     static constexpr size_t kSerializedSize =
-        sizeof(uint16_t) + 3 * sizeof(uint32_t);
+        sizeof(uint16_t) + 3 * sizeof(uint32_t) + sizeof(union ibv_gid);
     uint16_t lid;
     uint32_t qp_num;
     uint32_t sq_psn;
     uint32_t user_data_size;
+    union ibv_gid gid;
   } header;
   template <class It> static deserialized_qp deserialize(It it) {
     deserialized_qp des_qp;
@@ -38,6 +39,7 @@ struct deserialized_qp {
     detail::deserialize(it, des_qp.header.qp_num);
     detail::deserialize(it, des_qp.header.sq_psn);
     detail::deserialize(it, des_qp.header.user_data_size);
+    detail::deserialize(it, des_qp.header.gid);
     return des_qp;
   }
   std::vector<uint8_t> user_data;
@@ -151,7 +153,8 @@ public:
    * SRQ.
    */
   qp(const uint16_t remote_lid, const uint32_t remote_qpn,
-     const uint32_t remote_psn, std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
+     const uint32_t remote_psn, const union ibv_gid remote_gid,
+     std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
      std::shared_ptr<srq> srq = nullptr);
 
   /**
@@ -169,9 +172,9 @@ public:
    * SRQ.
    */
   qp(const uint16_t remote_lid, const uint32_t remote_qpn,
-     const uint32_t remote_psn, std::shared_ptr<pd> pd,
-     std::shared_ptr<cq> recv_cq, std::shared_ptr<cq> send_cq,
-     std::shared_ptr<srq> srq = nullptr);
+     const uint32_t remote_psn, const union ibv_gid remote_gid,
+     std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
+     std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq = nullptr);
 
   /**
    * @brief Construct a new qp object. The constructed Queue Pair will be in
@@ -433,8 +436,10 @@ public:
    * @param remote_lid The remote LID.
    * @param remote_qpn The remote QPN.
    * @param remote_psn The remote PSN.
+   * @param remote_gid The remote GID.
    */
-  void rtr(uint16_t remote_lid, uint32_t remote_qpn, uint32_t remote_psn);
+  void rtr(uint16_t remote_lid, uint32_t remote_qpn, uint32_t remote_psn,
+           union ibv_gid remote_gid);
 
   /**
    * @brief This function transitions the Queue Pair to the RTS state.
