@@ -65,8 +65,7 @@ list(APPEND
   -fno-rtti
   -Wall 
   -Wextra 
-  -pedantic 
-  -Werror
+  -pedantic
 )
 list(APPEND
   RDMAPP_LINK_OPTIONS
@@ -81,11 +80,17 @@ if (RDMAPP_ASAN)
 endif ()
 
 if (CMAKE_CXX_COMPILER_ID MATCHES Clang)
+  list(APPEND RDMAPP_LINK_LIBRARIES c++)
   list(APPEND RDMAPP_COMPILE_OPTIONS
     PUBLIC
     -stdlib=libc++
-    -fcoroutines-ts
   )
+  if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "17")
+    list(APPEND RDMAPP_COMPILE_OPTIONS
+      PUBLIC
+      -fcoroutines-ts
+    )
+  endif ()
 elseif (CMAKE_CXX_COMPILER_ID MATCHES GNU)
   if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "11") 
     list(APPEND RDMAPP_COMPILE_OPTIONS
