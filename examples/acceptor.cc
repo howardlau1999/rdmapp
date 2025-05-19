@@ -54,7 +54,7 @@ task<std::shared_ptr<qp>> acceptor::accept() {
   auto remote_qp = co_await recv_qp(connection);
   auto local_qp = std::make_shared<qp>(
       remote_qp.header.lid, remote_qp.header.qp_num, remote_qp.header.sq_psn,
-      remote_qp.header.gid, pd_, send_cq_, recv_cq_);
+      remote_qp.header.gid, pd_, recv_cq_, send_cq_);
   local_qp->user_data() = std::move(remote_qp.user_data);
   co_await send_qp(*local_qp, connection);
   co_return local_qp;
