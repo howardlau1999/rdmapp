@@ -120,8 +120,8 @@ void qp::create(enum ibv_qp_type qp_type) {
   qp_init_attr.send_cq = send_cq_->cq_;
   qp_init_attr.cap.max_recv_sge = 1;
   qp_init_attr.cap.max_send_sge = 1;
-  qp_init_attr.cap.max_recv_wr = 128;
-  qp_init_attr.cap.max_send_wr = 128;
+  qp_init_attr.cap.max_recv_wr = 1024;
+  qp_init_attr.cap.max_send_wr = 1024;
   qp_init_attr.sq_sig_all = 0;
   qp_init_attr.qp_context = this;
 
@@ -149,8 +149,8 @@ void qp::create_mlx5() {
   qp_init_attr.send_cq = send_cq_->cq_;
   qp_init_attr.cap.max_recv_sge = 1;
   qp_init_attr.cap.max_send_sge = 1;
-  qp_init_attr.cap.max_recv_wr = 128;
-  qp_init_attr.cap.max_send_wr = 128;
+  qp_init_attr.cap.max_recv_wr = 1024;
+  qp_init_attr.cap.max_send_wr = 1024;
   qp_init_attr.sq_sig_all = 0;
   qp_init_attr.qp_context = this;
 

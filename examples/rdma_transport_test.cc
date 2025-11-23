@@ -89,8 +89,9 @@ int main(int argc, char *argv[]) {
       config.chunk_size = chunk_size;
       config.buffer_size = buffer_size * 2;
 
-      auto send_cq = std::make_shared<rdmapp::cq>(device);
-      auto recv_cq = std::make_shared<rdmapp::cq>(device);
+      // Create CQs with larger size to handle more completions
+      auto send_cq = std::make_shared<rdmapp::cq>(device, 2048);
+      auto recv_cq = std::make_shared<rdmapp::cq>(device, 2048);
 
       // Create cq_poller for receiver's SEND completions (for CTS message)
       // NOTE: The receiver's completion thread polls recv_cq for receive
@@ -147,8 +148,9 @@ int main(int argc, char *argv[]) {
       config.chunk_size = chunk_size;
       config.buffer_size = buffer_size * 2;
 
-      auto send_cq = std::make_shared<rdmapp::cq>(device);
-      auto recv_cq = std::make_shared<rdmapp::cq>(device);
+      // Create CQs with larger size to handle more completions
+      auto send_cq = std::make_shared<rdmapp::cq>(device, 2048);
+      auto recv_cq = std::make_shared<rdmapp::cq>(device, 2048);
 
       // Create cq_poller for sender's send completions (packets)
       send_cq_poller = std::make_shared<rdmapp::cq_poller>(send_cq);
