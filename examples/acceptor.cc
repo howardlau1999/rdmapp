@@ -27,26 +27,28 @@ namespace rdmapp {
 
 acceptor::acceptor(std::shared_ptr<socket::event_loop> loop, uint16_t port,
                    std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
-                   std::shared_ptr<srq> srq)
-    : acceptor(loop, port, pd, cq, cq, srq) {}
+                   std::shared_ptr<srq> srq, enum ibv_qp_type qp_type)
+    : acceptor(loop, port, pd, cq, cq, srq, qp_type) {}
 
 acceptor::acceptor(std::shared_ptr<socket::event_loop> loop, uint16_t port,
                    std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
-                   std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq)
-    : acceptor(loop, "", port, pd, recv_cq, send_cq, srq) {}
+                   std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq,
+                   enum ibv_qp_type qp_type)
+    : acceptor(loop, "", port, pd, recv_cq, send_cq, srq, qp_type) {}
 
 acceptor::acceptor(std::shared_ptr<socket::event_loop> loop,
                    std::string const &hostname, uint16_t port,
                    std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
-                   std::shared_ptr<srq> srq)
-    : acceptor(loop, hostname, port, pd, cq, cq, srq) {}
+                   std::shared_ptr<srq> srq, enum ibv_qp_type qp_type)
+    : acceptor(loop, hostname, port, pd, cq, cq, srq, qp_type) {}
 
 acceptor::acceptor(std::shared_ptr<socket::event_loop> loop,
                    std::string const &hostname, uint16_t port,
                    std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
-                   std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq)
+                   std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq,
+                   enum ibv_qp_type qp_type)
     : listener_(std::make_unique<socket::tcp_listener>(loop, hostname, port)),
-      pd_(pd), recv_cq_(recv_cq), send_cq_(send_cq), srq_(srq) {}
+      pd_(pd), recv_cq_(recv_cq), send_cq_(send_cq), srq_(srq), qp_type_(qp_type) {}
 
 task<std::shared_ptr<qp>> acceptor::accept() {
   auto channel = co_await listener_->accept();
@@ -54,7 +56,7 @@ task<std::shared_ptr<qp>> acceptor::accept() {
   auto remote_qp = co_await recv_qp(connection);
   auto local_qp = std::make_shared<qp>(
       remote_qp.header.lid, remote_qp.header.qp_num, remote_qp.header.sq_psn,
-      remote_qp.header.gid, pd_, recv_cq_, send_cq_);
+      remote_qp.header.gid, pd_, recv_cq_, send_cq_, qp_type_);
   local_qp->user_data() = std::move(remote_qp.user_data);
   co_await send_qp(*local_qp, connection);
   co_return local_qp;

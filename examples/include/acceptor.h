@@ -25,6 +25,7 @@ class acceptor : public noncopyable {
   std::shared_ptr<cq> recv_cq_;
   std::shared_ptr<cq> send_cq_;
   std::shared_ptr<srq> srq_;
+  enum ibv_qp_type qp_type_;
 
 public:
   /**
@@ -39,7 +40,8 @@ public:
    */
   acceptor(std::shared_ptr<socket::event_loop> loop, uint16_t port,
            std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
-           std::shared_ptr<srq> srq = nullptr);
+           std::shared_ptr<srq> srq = nullptr,
+           enum ibv_qp_type qp_type = IBV_QPT_RC);
 
   /**
    * @brief Construct a new acceptor object.
@@ -54,7 +56,8 @@ public:
    */
   acceptor(std::shared_ptr<socket::event_loop> loop, uint16_t port,
            std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
-           std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq = nullptr);
+           std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq = nullptr,
+           enum ibv_qp_type qp_type = IBV_QPT_RC);
 
   /**
    * @brief Construct a new acceptor object.
@@ -69,7 +72,8 @@ public:
    */
   acceptor(std::shared_ptr<socket::event_loop> loop,
            std::string const &hostname, uint16_t port, std::shared_ptr<pd> pd,
-           std::shared_ptr<cq> cq, std::shared_ptr<srq> srq = nullptr);
+           std::shared_ptr<cq> cq, std::shared_ptr<srq> srq = nullptr,
+           enum ibv_qp_type qp_type = IBV_QPT_RC);
 
   /**
    * @brief Construct a new acceptor object.
@@ -86,7 +90,8 @@ public:
   acceptor(std::shared_ptr<socket::event_loop> loop,
            std::string const &hostname, uint16_t port, std::shared_ptr<pd> pd,
            std::shared_ptr<cq> recv_cq, std::shared_ptr<cq> send_cq,
-           std::shared_ptr<srq> srq = nullptr);
+           std::shared_ptr<srq> srq = nullptr,
+           enum ibv_qp_type qp_type = IBV_QPT_RC);
 
   /**
    * @brief This function is used to accept an incoming connection and queue
