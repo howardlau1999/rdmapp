@@ -14,8 +14,6 @@ RDMAReceiver::RDMAReceiver(std::shared_ptr<rdmapp::acceptor> acceptor,
     : acceptor_(acceptor), recv_cq_(recv_cq), config_(config) {
     std::cout << "Receiver: Initialized with MTU=" << config_.mtu 
               << ", chunk_size=" << config_.chunk_size << std::endl;
-    
-    // Allocate dummy buffer for receives
     dummy_recv_buffer_.resize(1);
 }
 
@@ -97,17 +95,12 @@ rdmapp::task<std::vector<uint8_t>> RDMAReceiver::receive_data(size_t expected_si
     // Send CTS to sender (this requires cq_poller to process send completion)
     co_await send_cts(expected_size);
     
-    // Wait for all packets to arrive
+    // Wait for all packets to arrive (unbounded wait) //TODO: turn to config for this
     {
         std::unique_lock<std::mutex> lock(completion_mutex_);
-        auto timeout = std::chrono::seconds(10);
-        bool success = completion_cv_.wait_for(lock, timeout, [this] {
+        completion_cv_.wait(lock, [this] {
             return reception_complete_.load();
         });
-        
-        if (!success) {
-            std::cout << "Receiver: Timeout waiting for packets" << std::endl;
-        }
     }
     
     // Stop background threads
