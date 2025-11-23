@@ -106,7 +106,7 @@ int main(int argc, char *argv[]) {
                 // Create acceptor and connector for loopback with separate CQs
                 int port = 12345;
                 auto acceptor = std::make_shared<rdmapp::acceptor>(loop, port, pd, recv_cq, send_cq);
-                auto connector = std::make_shared<rdmapp::connector>(loop, "128.110.219.158", port, pd, recv_cq, send_cq);
+                auto connector = std::make_shared<rdmapp::connector>(loop, "127.0.0.1", port, pd, recv_cq, send_cq);
                 
                 // Start sender in background
                 std::thread sender_thread([acceptor, buffer_size, config]() {
