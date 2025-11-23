@@ -67,10 +67,6 @@ bool verify_data(const std::vector<uint8_t> &sent,
 int main(int argc, char *argv[]) {
   srand(42);
 
-  size_t buffer_size = DEFAULT_BUFFER_SIZE;
-  size_t chunk_size = DEFAULT_CHUNK_SIZE;
-  size_t mtu = DEFAULT_MTU;
-
   auto device = std::make_shared<rdmapp::device>(0, 1, 3);
   auto pd = std::make_shared<rdmapp::pd>(device);
   std::shared_ptr<rdmapp::cq_poller> recv_cq_poller;
@@ -79,14 +75,40 @@ int main(int argc, char *argv[]) {
   auto looper = std::thread([loop]() { loop->loop(); });
 
   try {
-    if (argc == 2) {
-      // Server mode: [port] - acts as receiver (listens for connections)
+    Config config;
+    std::string config_file;
+
+    bool is_client_mode =
+        (argc >= 3 && std::string(argv[1]).find('.') != std::string::npos);
+
+    if (argc >= 3) {
+      std::string last_arg = argv[argc - 1];
+      if (last_arg.find("config") != std::string::npos ||
+          (last_arg.find('.') != std::string::npos &&
+           last_arg.find('/') != std::string::npos)) {
+        config_file = last_arg;
+      }
+    }
+
+    if (!config_file.empty()) {
+      if (config.load_from_file(config_file)) {
+        std::cout << "Loaded configuration from " << config_file << std::endl;
+        config.print();
+      } else {
+        std::cout << "Warning: Failed to load config file, using defaults"
+                  << std::endl;
+      }
+    }
+
+    size_t buffer_size = config.buffer_size;
+
+    if (!is_client_mode) {
+      // Server mode: [port] [config_file] - acts as receiver (listens for
+      // connections)
       int port = std::stoi(argv[1]);
       std::cout << "Starting as RECEIVER on port " << port << std::endl;
 
-      Config config;
-      config.mtu = mtu;
-      config.chunk_size = chunk_size;
+      // Override buffer_size for receiver (double size for safety)
       config.buffer_size = buffer_size * 2;
 
       // Create CQs with larger size to handle more completions
@@ -135,17 +157,19 @@ int main(int argc, char *argv[]) {
       }();
 
       receiver_task.detach();
-    } else if (argc == 3) {
-      // Client mode: [receiver_ip] [port] - acts as sender (connects to
-      // receiver)
+    } else if (argc >= 3) {
+      // Client mode: [receiver_ip] [port] [config_file] - acts as sender
+      // (connects to receiver)
       std::string receiver_ip = argv[1];
-      int port = std::stoi(argv[2]);
+      int port_idx = 2;
+
+      // If config file was provided as last arg, port is still at index 2
+      // Format is always: receiver_ip port [config_file]
+      int port = std::stoi(argv[port_idx]);
       std::cout << "Starting as SENDER connecting to " << receiver_ip << ":"
                 << port << std::endl;
 
-      Config config;
-      config.mtu = mtu;
-      config.chunk_size = chunk_size;
+      // Override buffer_size for sender (double size for safety)
       config.buffer_size = buffer_size * 2;
 
       // Create CQs with larger size to handle more completions
@@ -197,8 +221,13 @@ int main(int argc, char *argv[]) {
       sender_task.detach();
     } else {
       std::cerr << "Usage:" << std::endl;
-      std::cerr << "  Receiver (server): " << argv[0] << " <port>" << std::endl;
-      std::cerr << "  Sender (client):   " << argv[0] << " <receiver_ip> <port>"
+      std::cerr << "  Receiver (server): " << argv[0] << " <port> [config_file]"
+                << std::endl;
+      std::cerr << "  Sender (client):   " << argv[0]
+                << " <receiver_ip> <port> [config_file]" << std::endl;
+      std::cerr << std::endl;
+      std::cerr << "  config_file: Optional path to .config file (default: use "
+                   "built-in defaults)"
                 << std::endl;
       return 1;
     }

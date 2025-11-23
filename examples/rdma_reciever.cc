@@ -95,12 +95,18 @@ rdmapp::task<std::vector<uint8_t>> RDMAReceiver::receive_data(size_t expected_si
     // Send CTS to sender (this requires cq_poller to process send completion)
     co_await send_cts(expected_size);
     
-    // Wait for all packets to arrive (unbounded wait) //TODO: turn to config for this
+    // Wait for all packets to arrive
     {
         std::unique_lock<std::mutex> lock(completion_mutex_);
-        completion_cv_.wait(lock, [this] {
+        auto timeout = std::chrono::seconds(config_.receiver_timeout_seconds);
+        bool success = completion_cv_.wait_for(lock, timeout, [this] {
             return reception_complete_.load();
         });
+        
+        if (!success) {
+            std::cout << "Receiver: Timeout waiting for packets (timeout: " 
+                      << config_.receiver_timeout_seconds << " seconds)" << std::endl;
+        }
     }
     
     // Stop background threads

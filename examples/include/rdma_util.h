@@ -1,9 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include <vector>
-#include <atomic>
-#include <bitset>
+#include <string>
 
 namespace RDMA_EC {
 
@@ -11,13 +9,26 @@ namespace RDMA_EC {
 constexpr size_t DEFAULT_MTU = 1024;
 constexpr size_t DEFAULT_CHUNK_SIZE = 16;  // packets per chunk
 constexpr size_t DEFAULT_BUFFER_SIZE = 1024 * 1024;  // 1MB
+constexpr int DEFAULT_RECEIVER_TIMEOUT_SECONDS = 10;
 
 // Configuration for RDMA transport
-struct Config {
+class Config {
+public:
     size_t mtu = DEFAULT_MTU;
     size_t chunk_size = DEFAULT_CHUNK_SIZE;
     size_t buffer_size = DEFAULT_BUFFER_SIZE;
     int cpu_core_id = 2;  // -1 means no CPU pinning
+    int receiver_timeout_seconds = DEFAULT_RECEIVER_TIMEOUT_SECONDS;
+
+    bool load_from_file(const std::string& filepath);
+
+    bool save_to_file(const std::string& filepath) const;
+
+    void print() const;
+
+private:
+    std::string trim(const std::string& str) const;
+    bool parse_line(const std::string& line);
 };
 
 // Clear-To-Send message structure

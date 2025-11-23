@@ -131,6 +131,7 @@ if (RDMAPP_BUILD_EXAMPLES)
     examples/chunked_transmission.cc
     examples/rdma_sender.cc
     examples/rdma_reciever.cc
+    examples/rdma_util.cc
   )
   add_library(rdmapp_examples STATIC ${RDMAPP_EXAMPLES_LIB_SOURCE_FILES})
   target_compile_options(rdmapp_examples ${RDMAPP_COMPILE_OPTIONS})
