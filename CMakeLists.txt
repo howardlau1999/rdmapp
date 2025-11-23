@@ -129,13 +129,15 @@ if (RDMAPP_BUILD_EXAMPLES)
     examples/connector.cc
     examples/qp_transmission.cc
     examples/chunked_transmission.cc
+    examples/rdma_sender.cc
+    examples/rdma_reciever.cc
   )
   add_library(rdmapp_examples STATIC ${RDMAPP_EXAMPLES_LIB_SOURCE_FILES})
   target_compile_options(rdmapp_examples ${RDMAPP_COMPILE_OPTIONS})
   target_include_directories(rdmapp_examples PUBLIC examples/include)
   target_link_libraries(rdmapp_examples PUBLIC rdmapp)
   target_link_options(rdmapp_examples ${RDMAPP_LINK_OPTIONS})
-  set(RDMAPP_EXAMPLES helloworld send_bw write_bw chunked_transmission)
+  set(RDMAPP_EXAMPLES helloworld send_bw write_bw chunked_transmission rdma_transport_test)
   foreach (EXAMPLE IN LISTS RDMAPP_EXAMPLES)
     add_executable(${EXAMPLE} examples/${EXAMPLE}.cc)
     target_link_libraries(${EXAMPLE} rdmapp_examples)
