@@ -4,18 +4,18 @@
 
 namespace RDMA_EC {
 
-RDMASender::RDMASender(std::shared_ptr<rdmapp::acceptor> acceptor, 
+RDMASender::RDMASender(std::shared_ptr<rdmapp::connector> connector, 
                        const Config& config)
-    : acceptor_(acceptor), config_(config) {
+    : connector_(connector), config_(config) {
     std::cout << "Sender: Initialized with MTU=" << config_.mtu 
               << ", chunk_size=" << config_.chunk_size << std::endl;
 }
 
 rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
-    // Accept connection from receiver
-    std::cout << "Sender: Waiting for connection..." << std::endl;
-    qp_ = co_await acceptor_->accept();
-    std::cout << "Sender: Connection accepted" << std::endl;
+    // Connect to receiver
+    std::cout << "Sender: Connecting..." << std::endl;
+    qp_ = co_await connector_->connect();
+    std::cout << "Sender: Connected" << std::endl;
     
     // Wait for CTS message from receiver
     co_await wait_for_cts();

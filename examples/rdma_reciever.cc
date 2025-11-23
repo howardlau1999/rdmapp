@@ -8,10 +8,10 @@
 
 namespace RDMA_EC {
 
-RDMAReceiver::RDMAReceiver(std::shared_ptr<rdmapp::connector> connector,
+RDMAReceiver::RDMAReceiver(std::shared_ptr<rdmapp::acceptor> acceptor,
                            std::shared_ptr<rdmapp::cq> recv_cq,
                            const Config& config)
-    : connector_(connector), recv_cq_(recv_cq), config_(config) {
+    : acceptor_(acceptor), recv_cq_(recv_cq), config_(config) {
     std::cout << "Receiver: Initialized with MTU=" << config_.mtu 
               << ", chunk_size=" << config_.chunk_size << std::endl;
     
@@ -33,10 +33,10 @@ RDMAReceiver::~RDMAReceiver() {
 rdmapp::task<std::vector<uint8_t>> RDMAReceiver::receive_data(size_t expected_size) {
     expected_size_ = expected_size;
     
-    // Connect to sender
-    std::cout << "Receiver: Connecting..." << std::endl;
-    qp_ = co_await connector_->connect();
-    std::cout << "Receiver: Connected" << std::endl;
+    // Accept connection from sender
+    std::cout << "Receiver: Waiting for connection..." << std::endl;
+    qp_ = co_await acceptor_->accept();
+    std::cout << "Receiver: Connection accepted" << std::endl;
     
     // Allocate and register receive buffer
     recv_buffer_.resize(config_.buffer_size);

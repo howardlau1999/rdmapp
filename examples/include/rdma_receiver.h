@@ -1,7 +1,7 @@
 #pragma once
 
 #include "rdma_util.h"
-#include "connector.h"
+#include "acceptor.h"
 #include <rdmapp/rdmapp.h>
 #include <memory>
 #include <vector>
@@ -14,7 +14,7 @@ namespace RDMA_EC {
 
 class RDMAReceiver {
 public:
-    RDMAReceiver(std::shared_ptr<rdmapp::connector> connector,
+    RDMAReceiver(std::shared_ptr<rdmapp::acceptor> acceptor,
                  std::shared_ptr<rdmapp::cq> recv_cq,
                  const Config& config = Config{});
     ~RDMAReceiver();
@@ -45,7 +45,7 @@ private:
     // Check if reception is complete
     bool is_complete() const;
     
-    std::shared_ptr<rdmapp::connector> connector_;
+    std::shared_ptr<rdmapp::acceptor> acceptor_;
     std::shared_ptr<rdmapp::qp> qp_;
     std::shared_ptr<rdmapp::cq> recv_cq_;
     Config config_;
