@@ -6,15 +6,53 @@
 #include <atomic>
 #include <chrono>
 #include <cstring>
+#include <future>
 #include <iostream>
+#include <optional>
 #include <random>
 #include <thread>
+#include <unistd.h>
+#include <cstdlib>
 
 #include <rdmapp/rdmapp.h>
 
 using namespace RDMA_EC;
 
-// Generate test data with pattern
+// Allocate page-aligned buffer and fill with test data pattern
+// Returns the allocated buffer pointer (caller must free with free())
+void* allocate_test_data(size_t size) {
+  void* buffer = nullptr;
+  size_t page_size = sysconf(_SC_PAGESIZE);
+  
+  // Round up size to page boundary
+  size_t aligned_size = ((size + page_size - 1) / page_size) * page_size;
+  
+  if (posix_memalign(&buffer, page_size, aligned_size)) {
+    perror("posix_memalign");
+    return nullptr;
+  }
+  
+  // Fill with test pattern
+  uint8_t* data = static_cast<uint8_t*>(buffer);
+  for (size_t i = 0; i < size; ++i) {
+    data[i] = static_cast<uint8_t>((i * 7 + 42) % 256);
+  }
+  
+  // Zero out the padding area (if any)
+  if (aligned_size > size) {
+    memset(data + size, 0, aligned_size - size);
+  }
+  
+  std::cout << "Allocated page-aligned buffer: size=" << size 
+            << ", aligned_size=" << aligned_size 
+            << ", page_size=" << page_size 
+            << ", addr=0x" << std::hex << reinterpret_cast<uintptr_t>(buffer) 
+            << std::dec << std::endl;
+  
+  return buffer;
+}
+
+// Generate test data with pattern (kept for receiver verification)
 std::vector<uint8_t> generate_test_data(size_t size) {
   std::vector<uint8_t> data(size);
 
@@ -73,6 +111,10 @@ int main(int argc, char *argv[]) {
   std::shared_ptr<rdmapp::cq_poller> send_cq_poller;
   auto loop = rdmapp::socket::event_loop::new_loop();
   auto looper = std::thread([loop]() { loop->loop(); });
+  
+  // Declare futures for task completion tracking (using optional to handle conditional assignment)
+  std::optional<std::future<void>> receiver_future;
+  std::optional<std::future<void>> sender_future;
 
   try {
     Config config;
@@ -156,6 +198,8 @@ int main(int argc, char *argv[]) {
         co_return;
       }();
 
+      // Get future before detaching so we can wait for completion
+      receiver_future = std::move(receiver_task.get_future());
       receiver_task.detach();
     } else if (argc >= 3) {
       // Client mode: [receiver_ip] [port] [config_file] - acts as sender
@@ -188,7 +232,12 @@ int main(int argc, char *argv[]) {
                                         config]() -> rdmapp::task<void> {
         RDMASender sender(connector, config);
 
-        auto large_data_buffer = generate_test_data(buffer_size);
+        // Allocate page-aligned buffer for RDMA
+        void* large_data_buffer = allocate_test_data(buffer_size);
+        if (!large_data_buffer) {
+          std::cerr << "Failed to allocate page-aligned buffer" << std::endl;
+          co_return;
+        }
 
         std::cout << "\n=== SENDER STARTING ===" << std::endl;
         std::cout << "Sending " << buffer_size << " bytes" << std::endl;
@@ -197,8 +246,7 @@ int main(int argc, char *argv[]) {
 
         auto start_time = std::chrono::high_resolution_clock::now();
 
-        co_await sender.send_data(large_data_buffer.data(),
-                                  large_data_buffer.size());
+        co_await sender.send_data(large_data_buffer, buffer_size);
 
         auto end_time = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -215,9 +263,14 @@ int main(int argc, char *argv[]) {
                         1024)
                     << " MB/s" << std::endl;
         }
+        
+        // Free the page-aligned buffer
+        free(large_data_buffer);
         co_return;
       }();
 
+      // Get future before detaching so we can wait for completion
+      sender_future = std::move(sender_task.get_future());
       sender_task.detach();
     } else {
       std::cerr << "Usage:" << std::endl;
@@ -231,7 +284,27 @@ int main(int argc, char *argv[]) {
                 << std::endl;
       return 1;
     }
-    std::this_thread::sleep_for(std::chrono::seconds(10));
+    
+    // Wait for the task to complete instead of using a fixed timeout
+    if (!is_client_mode && receiver_future.has_value()) {
+      // Receiver mode: wait for receiver task
+      try {
+        receiver_future->wait();
+        receiver_future->get();  // This will throw if there was an exception
+        std::cout << "Receiver task completed successfully" << std::endl;
+      } catch (const std::exception &e) {
+        std::cerr << "Receiver task failed: " << e.what() << std::endl;
+      }
+    } else if (is_client_mode && sender_future.has_value()) {
+      // Sender mode: wait for sender task
+      try {
+        sender_future->wait();
+        sender_future->get();  // This will throw if there was an exception
+        std::cout << "Sender task completed successfully" << std::endl;
+      } catch (const std::exception &e) {
+        std::cerr << "Sender task failed: " << e.what() << std::endl;
+      }
+    }
   } catch (const std::exception &e) {
     std::cerr << "Error: " << e.what() << std::endl;
     return 1;

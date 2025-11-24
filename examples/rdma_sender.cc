@@ -44,7 +44,7 @@ rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
         size_t chunk_start_offset = chunk_idx * config_.chunk_size * config_.mtu;
         size_t packets_in_chunk = std::min(config_.chunk_size,
                                           num_packets - chunk_idx * config_.chunk_size);
-        
+        std::cout << "Sender: Sending chunk " << chunk_idx << " with " << packets_in_chunk << " packets" << std::endl;
         co_await send_chunk(chunk_idx, data_ptr, chunk_start_offset, packets_in_chunk);
     }
     
