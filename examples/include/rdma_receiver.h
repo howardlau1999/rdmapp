@@ -50,8 +50,9 @@ private:
     std::shared_ptr<rdmapp::cq> recv_cq_;
     Config config_;
     
-    // Receive buffer
-    std::vector<uint8_t> recv_buffer_;
+    // Receive buffer (page-aligned for RDMA)
+    void* recv_buffer_{nullptr};  // Page-aligned buffer allocated with posix_memalign
+    size_t recv_buffer_size_{0};   // Actual allocated size (may be larger than requested)
     std::shared_ptr<rdmapp::local_mr> local_mr_;
     
     // Packet tracking bitmaps

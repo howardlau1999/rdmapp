@@ -5,6 +5,8 @@
 #include <pthread.h>
 #include <sched.h>
 #include <infiniband/verbs.h>
+#include <unistd.h>
+#include <cstdlib>
 
 namespace RDMA_EC {
 
@@ -26,6 +28,12 @@ RDMAReceiver::~RDMAReceiver() {
     if (frontend_thread_.joinable()) {
         frontend_thread_.join();
     }
+    
+    // Free page-aligned receive buffer
+    if (recv_buffer_) {
+        free(recv_buffer_);
+        recv_buffer_ = nullptr;
+    }
 }
 
 rdmapp::task<std::vector<uint8_t>> RDMAReceiver::receive_data(size_t expected_size) {
@@ -36,11 +44,25 @@ rdmapp::task<std::vector<uint8_t>> RDMAReceiver::receive_data(size_t expected_si
     qp_ = co_await acceptor_->accept();
     std::cout << "Receiver: Connection accepted" << std::endl;
     
-    // Allocate and register receive buffer
-    recv_buffer_.resize(config_.buffer_size);
+    // Allocate and register page-aligned receive buffer
+    size_t page_size = sysconf(_SC_PAGESIZE);
+    size_t aligned_size = ((config_.buffer_size + page_size - 1) / page_size) * page_size;
+    
+    if (posix_memalign(&recv_buffer_, page_size, aligned_size)) {
+        perror("posix_memalign");
+        throw std::runtime_error("Failed to allocate page-aligned receive buffer");
+    }
+    recv_buffer_size_ = aligned_size;
+    
+    std::cout << "Receiver: Allocated page-aligned buffer: size=" << config_.buffer_size
+              << ", aligned_size=" << aligned_size 
+              << ", page_size=" << page_size 
+              << ", addr=0x" << std::hex << reinterpret_cast<uintptr_t>(recv_buffer_) 
+              << std::dec << std::endl;
+    
     auto pd = qp_->pd_ptr();
     local_mr_ = std::make_shared<rdmapp::local_mr>(
-        pd->reg_mr(recv_buffer_.data(), recv_buffer_.size()));
+        pd->reg_mr(recv_buffer_, recv_buffer_size_));
     
     // Calculate expected packets and chunks
     total_packets_ = calculate_num_packets(expected_size, config_.mtu);
@@ -121,9 +143,9 @@ rdmapp::task<std::vector<uint8_t>> RDMAReceiver::receive_data(size_t expected_si
     // Update statistics
     bytes_received_ = expected_size;
     
-    // Return the received data
-    std::vector<uint8_t> result(recv_buffer_.begin(), 
-                                recv_buffer_.begin() + expected_size);
+    // Return the received data (copy from page-aligned buffer)
+    uint8_t* recv_data = static_cast<uint8_t*>(recv_buffer_);
+    std::vector<uint8_t> result(recv_data, recv_data + expected_size);
     
     std::cout << "Receiver: Transfer complete. Received " 
               << packets_received_.load() << " packets (" 
@@ -134,7 +156,7 @@ rdmapp::task<std::vector<uint8_t>> RDMAReceiver::receive_data(size_t expected_si
 
 rdmapp::task<void> RDMAReceiver::send_cts(size_t buffer_size) {
     CTSInfo cts;
-    cts.remote_addr = reinterpret_cast<uint64_t>(recv_buffer_.data());
+    cts.remote_addr = reinterpret_cast<uint64_t>(recv_buffer_);
     cts.rkey = local_mr_->rkey();
     cts.buffer_size = buffer_size;
     cts.total_packets = total_packets_;
