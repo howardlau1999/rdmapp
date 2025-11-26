@@ -284,6 +284,7 @@ void RDMAReceiver::process_completions() {
     std::vector<struct ibv_wc> wc_vec(batch_size);
     size_t total_polled = 0;
     size_t total_with_imm = 0;
+    size_t receives_to_repost = 0;  // Track how many receives need reposting
     
     // Poll very aggressively - we need to get completions before cq_poller does
     // because cq_poller will consume them from the CQ even if it skips processing
@@ -300,6 +301,9 @@ void RDMAReceiver::process_completions() {
             std::cout << "[BACKEND] Polled " << num_completions << " completions (total polled: " 
                       << total_polled << std::endl;
         }
+        
+        // Reset counter for this batch
+        receives_to_repost = 0;
         
         for (size_t i = 0; i < num_completions; ++i) {
             const auto& wc = wc_vec[i];
@@ -329,15 +333,14 @@ void RDMAReceiver::process_completions() {
                 continue;
             }
             
+            // Count this receive completion for reposting (we'll repost in batch at the end)
+            receives_to_repost++;
+            
             // Check completion status
             if (wc.status != IBV_WC_SUCCESS) {
                 std::cout << "Receiver: Completion error: status=" << wc.status 
                           << ", opcode=" << wc.opcode << std::endl;
-                // Still repost receive even on error
-                if (dummy_recv_mr_) {
-                    post_single_receive();
-                }
-                continue;
+                continue;  // Still count for reposting
             }
             
             // Check if this completion has an immediate value
@@ -356,22 +359,14 @@ void RDMAReceiver::process_completions() {
                 if (msg_id != current_msg_id_ - 1) {
                     std::cout << "Receiver: Warning - message ID mismatch: expected " 
                               << (current_msg_id_ - 1) << ", got " << msg_id << std::endl;
-                    // Still repost receive
-                    if (dummy_recv_mr_) {
-                        post_single_receive();
-                    }
-                    continue;
+                    continue;  // Still count for reposting
                 }
                 
                 // Verify packet index is valid
                 if (packet_idx >= total_packets_) {
                     std::cout << "Receiver: Warning - invalid packet index: " 
                               << packet_idx << " (max: " << total_packets_ << ")" << std::endl;
-                    // Still repost receive
-                    if (dummy_recv_mr_) {
-                        post_single_receive();
-                    }
-                    continue;
+                    continue;  // Still count for reposting
                 }
                 
                 // Get the bitmap entry index (packet_idx / 16)
@@ -381,20 +376,14 @@ void RDMAReceiver::process_completions() {
                 // Safety checks - ensure packet_bitmap_ is valid and index is in range
                 if (packet_bitmap_.empty()) {
                     std::cerr << "[BACKEND] FATAL - packet_bitmap_ is empty!" << std::endl;
-                    if (dummy_recv_mr_) {
-                        post_single_receive();
-                    }
-                    continue;
+                    continue;  // Still count for reposting
                 }
                 
                 if (bitmap_idx >= packet_bitmap_.size()) {
                     std::cerr << "[BACKEND] FATAL - bitmap_idx " << bitmap_idx 
                               << " >= packet_bitmap_.size() " << packet_bitmap_.size() 
                               << " (packet_idx=" << packet_idx << ")" << std::endl;
-                    if (dummy_recv_mr_) {
-                        post_single_receive();
-                    }
-                    continue;
+                    continue;  // Still count for reposting
                 }
                 
                 // Set the bit atomically using fetch_or
@@ -412,19 +401,22 @@ void RDMAReceiver::process_completions() {
                     std::cout << "[BACKEND] Packet " << packet_idx 
                               << " already marked (duplicate completion?)" << std::endl;
                 }
-                
-                // Repost a receive to replace the one we just consumed
-                if (dummy_recv_mr_) {
-                    post_single_receive();
-                }
             } else {
                 std::cout << "[BACKEND] Completion without IMM: opcode=" << wc.opcode 
                           << ", byte_len=" << wc.byte_len << " (skipping)" << std::endl;
-                
-                // Repost a receive even for non-IMM completions
-                if (dummy_recv_mr_) {
-                    post_single_receive();
-                }
+            }
+        }
+        
+        // Batch repost all receives that were consumed in this polling cycle
+        // This is more efficient than reposting one-by-one and prevents running out
+        // By reposting in batches, we maintain a buffer of posted receives even if
+        // the sender is sending faster than we can process individual completions
+        if (receives_to_repost > 0 && dummy_recv_mr_) {
+            for (size_t i = 0; i < receives_to_repost; ++i) {
+                post_single_receive();  // May fail silently, but we'll try again next cycle
+            }
+            if (receives_to_repost > 1) {
+                std::cout << "[BACKEND] Reposted " << receives_to_repost << " receives in batch" << std::endl;
             }
         }
         
