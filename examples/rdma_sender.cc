@@ -12,23 +12,19 @@ RDMASender::RDMASender(std::shared_ptr<rdmapp::connector> connector,
 }
 
 rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
-    // Connect to receiver
     std::cout << "Sender: Connecting..." << std::endl;
     qp_ = co_await connector_->connect();
     std::cout << "Sender: Connected" << std::endl;
     
-    // Wait for CTS message from receiver
     co_await wait_for_cts();
     std::cout << "Sender: Received CTS - remote_addr=0x" << std::hex 
               << cts_info_.remote_addr << ", rkey=0x" << cts_info_.rkey
               << std::dec << ", packets=" << cts_info_.total_packets << std::endl;
     
-    // Register local memory
     auto pd = qp_->pd_ptr();
     local_mr_ = std::make_shared<rdmapp::local_mr>(
         pd->reg_mr(const_cast<void*>(data), size));
     
-    // Calculate segmentation
     const uint8_t* data_ptr = static_cast<const uint8_t*>(data);
     size_t num_packets = calculate_num_packets(size, config_.mtu);
     size_t num_chunks = calculate_num_chunks(num_packets, config_.chunk_size);
@@ -39,7 +35,6 @@ rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
               << num_packets << " packets across " 
               << num_chunks << " chunks" << std::endl;
     
-    // Send all chunks
     for (size_t chunk_idx = 0; chunk_idx < num_chunks; ++chunk_idx) {
         size_t chunk_start_offset = chunk_idx * config_.chunk_size * config_.mtu;
         size_t packets_in_chunk = std::min(config_.chunk_size,
@@ -48,7 +43,6 @@ rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
         co_await send_chunk(chunk_idx, data_ptr, chunk_start_offset, packets_in_chunk);
     }
     
-    // Update statistics
     packets_sent_ += num_packets;
     bytes_sent_ += size;
     
@@ -98,13 +92,11 @@ rdmapp::task<void> RDMASender::send_packet(size_t packet_idx,
         static_cast<uint32_t>(packet_size),
         cts_info_.rkey);
     
-    // Encode packet index in immediate value
     uint32_t imm = encode_immediate(current_msg_id_, packet_idx);
     
     std::cout << "Sender: Sending packet " << packet_idx << " offset=" << offset 
                 << " size=" << packet_size << " imm=0x" << std::hex << imm << std::dec << std::endl;
 
-    // Send packet with RDMA Write with Immediate
     co_await qp_->write_with_imm(
         remote_mr,
         const_cast<uint8_t*>(data + offset),

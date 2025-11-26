@@ -39,12 +39,10 @@ RDMAReceiver::~RDMAReceiver() {
 rdmapp::task<std::vector<uint8_t>> RDMAReceiver::receive_data(size_t expected_size) {
     expected_size_ = expected_size;
     
-    // Accept connection from sender
     std::cout << "Receiver: Waiting for connection..." << std::endl;
     qp_ = co_await acceptor_->accept();
     std::cout << "Receiver: Connection accepted" << std::endl;
     
-    // Allocate and register page-aligned receive buffer
     size_t page_size = sysconf(_SC_PAGESIZE);
     size_t aligned_size = ((config_.buffer_size + page_size - 1) / page_size) * page_size;
     
@@ -64,7 +62,6 @@ rdmapp::task<std::vector<uint8_t>> RDMAReceiver::receive_data(size_t expected_si
     local_mr_ = std::make_shared<rdmapp::local_mr>(
         pd->reg_mr(recv_buffer_, recv_buffer_size_));
     
-    // Calculate expected packets and chunks
     total_packets_ = calculate_num_packets(expected_size, config_.mtu);
     total_chunks_ = calculate_num_chunks(total_packets_, config_.chunk_size);
     
@@ -181,13 +178,16 @@ rdmapp::task<void> RDMAReceiver::post_receives(size_t count) {
     dummy_recv_mr_ = std::make_shared<rdmapp::local_mr>(
         pd->reg_mr(dummy_recv_buffer_.data(), dummy_recv_buffer_.size()));
     
-    // Post initial batch of receives (limited by queue capacity ~128)
-    // We'll repost receives as they're consumed in process_completions
-    constexpr size_t max_initial_receives = 128;
-    size_t initial_count = std::min(count, max_initial_receives);
+    // Post initial batch of receives
+    // QP capacity is 1024, but we need at least total_packets_ + buffer
+    // Post as many as needed (up to QP capacity) to avoid IBV_WC_RETRY_EXC_ERR
+    constexpr size_t max_qp_capacity = 1024;
+    size_t needed_receives = count;
+    size_t initial_count = std::min(needed_receives, max_qp_capacity);
     
-    std::cout << "Receiver: Posting initial batch of " << initial_count 
-              << " receives (queue capacity limited, will repost as consumed)..." << std::endl;
+    std::cout << "Receiver: Posting " << initial_count 
+              << " receives (needed: " << needed_receives 
+              << ", QP capacity: " << max_qp_capacity << ")..." << std::endl;
     
     for (size_t i = 0; i < initial_count; ++i) {
         post_single_receive();
@@ -565,7 +565,6 @@ void RDMAReceiver::frontend_poller() {
             }
         }
         
-        // Check if we should exit
         if (reception_complete_.load(std::memory_order_acquire)) {
             break;
         }

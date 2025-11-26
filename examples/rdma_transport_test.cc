@@ -24,7 +24,6 @@ void* allocate_test_data(size_t size) {
   void* buffer = nullptr;
   size_t page_size = sysconf(_SC_PAGESIZE);
   
-  // Round up size to page boundary
   size_t aligned_size = ((size + page_size - 1) / page_size) * page_size;
   
   if (posix_memalign(&buffer, page_size, aligned_size)) {
@@ -64,7 +63,6 @@ std::vector<uint8_t> generate_test_data(size_t size) {
   return data;
 }
 
-// Verify received data
 bool verify_data(const std::vector<uint8_t> &sent,
                  const std::vector<uint8_t> &received) {
   if (sent.size() != received.size()) {
@@ -112,7 +110,6 @@ int main(int argc, char *argv[]) {
   auto loop = rdmapp::socket::event_loop::new_loop();
   auto looper = std::thread([loop]() { loop->loop(); });
   
-  // Declare futures for task completion tracking (using optional to handle conditional assignment)
   std::optional<std::future<void>> receiver_future;
   std::optional<std::future<void>> sender_future;
 
@@ -150,10 +147,8 @@ int main(int argc, char *argv[]) {
       int port = std::stoi(argv[1]);
       std::cout << "Starting as RECEIVER on port " << port << std::endl;
 
-      // Override buffer_size for receiver (double size for safety)
       config.buffer_size = buffer_size * 2;
 
-      // Create CQs with larger size to handle more completions
       auto send_cq = std::make_shared<rdmapp::cq>(device, 2048);
       auto recv_cq = std::make_shared<rdmapp::cq>(device, 2048);
 
@@ -166,7 +161,7 @@ int main(int argc, char *argv[]) {
       auto acceptor =
           std::make_shared<rdmapp::acceptor>(loop, port, pd, recv_cq, send_cq);
 
-      rdmapp::task<void> receiver_task = [acceptor, recv_cq, buffer_size,
+        rdmapp::task<void> receiver_task = [acceptor, recv_cq, buffer_size,
                                           config]() -> rdmapp::task<void> {
         RDMAReceiver receiver(acceptor, recv_cq, config);
 
@@ -197,8 +192,6 @@ int main(int argc, char *argv[]) {
         }
         co_return;
       }();
-
-      // Get future before detaching so we can wait for completion
       receiver_future = std::move(receiver_task.get_future());
       receiver_task.detach();
     } else if (argc >= 3) {
@@ -206,23 +199,16 @@ int main(int argc, char *argv[]) {
       // (connects to receiver)
       std::string receiver_ip = argv[1];
       int port_idx = 2;
-
-      // If config file was provided as last arg, port is still at index 2
-      // Format is always: receiver_ip port [config_file]
       int port = std::stoi(argv[port_idx]);
       std::cout << "Starting as SENDER connecting to " << receiver_ip << ":"
                 << port << std::endl;
 
-      // Override buffer_size for sender (double size for safety)
       config.buffer_size = buffer_size * 2;
 
-      // Create CQs with larger size to handle more completions
       auto send_cq = std::make_shared<rdmapp::cq>(device, 2048);
       auto recv_cq = std::make_shared<rdmapp::cq>(device, 2048);
 
-      // Create cq_poller for sender's send completions (packets)
       send_cq_poller = std::make_shared<rdmapp::cq_poller>(send_cq);
-      // Create cq_poller for sender's receive completions (CTS from receiver)
       recv_cq_poller = std::make_shared<rdmapp::cq_poller>(recv_cq);
 
       auto connector = std::make_shared<rdmapp::connector>(
@@ -232,7 +218,6 @@ int main(int argc, char *argv[]) {
                                         config]() -> rdmapp::task<void> {
         RDMASender sender(connector, config);
 
-        // Allocate page-aligned buffer for RDMA
         void* large_data_buffer = allocate_test_data(buffer_size);
         if (!large_data_buffer) {
           std::cerr << "Failed to allocate page-aligned buffer" << std::endl;
@@ -264,12 +249,9 @@ int main(int argc, char *argv[]) {
                     << " MB/s" << std::endl;
         }
         
-        // Free the page-aligned buffer
         free(large_data_buffer);
         co_return;
       }();
-
-      // Get future before detaching so we can wait for completion
       sender_future = std::move(sender_task.get_future());
       sender_task.detach();
     } else {
@@ -285,9 +267,7 @@ int main(int argc, char *argv[]) {
       return 1;
     }
     
-    // Wait for the task to complete instead of using a fixed timeout
     if (!is_client_mode && receiver_future.has_value()) {
-      // Receiver mode: wait for receiver task
       try {
         receiver_future->wait();
         receiver_future->get();  // This will throw if there was an exception
@@ -296,7 +276,6 @@ int main(int argc, char *argv[]) {
         std::cerr << "Receiver task failed: " << e.what() << std::endl;
       }
     } else if (is_client_mode && sender_future.has_value()) {
-      // Sender mode: wait for sender task
       try {
         sender_future->wait();
         sender_future->get();  // This will throw if there was an exception

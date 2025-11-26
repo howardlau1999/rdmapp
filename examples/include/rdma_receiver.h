@@ -56,7 +56,7 @@ private:
     std::shared_ptr<rdmapp::local_mr> local_mr_;
     
     // Packet tracking bitmaps
-    std::vector<std::atomic<uint16_t>> packet_bitmap_;
+    std::vector<std::atomic<uint16_t>> packet_bitmap_; //templating stuff here maybe
     std::atomic<uint64_t> chunk_bitmap_{0};
     size_t total_packets_{0};
     size_t total_chunks_{0};
