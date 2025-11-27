@@ -53,14 +53,11 @@ rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
 }
 
 rdmapp::task<void> RDMASender::wait_for_cts() {
-    // Receive CTS message from receiver
     auto [bytes, imm_opt] = co_await qp_->recv(&cts_info_, sizeof(CTSInfo));
     
     if (bytes != sizeof(CTSInfo)) {
         throw std::runtime_error("Invalid CTS message size");
     }
-    
-    // Store message ID from CTS
     current_msg_id_ = cts_info_.msg_id;
     
     co_return;

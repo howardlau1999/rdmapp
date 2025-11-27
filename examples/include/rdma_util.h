@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <infiniband/verbs.h>
 
 namespace RDMA_EC {
 
@@ -10,6 +11,7 @@ constexpr size_t DEFAULT_MTU = 1024;
 constexpr size_t DEFAULT_CHUNK_SIZE = 16;  // packets per chunk
 constexpr size_t DEFAULT_BUFFER_SIZE = 1024 * 1024;  // 1MB
 constexpr int DEFAULT_RECEIVER_TIMEOUT_SECONDS = 10;
+extern enum ibv_qp_type DEFAULT_RDMA_TRANSPORT;
 
 // Configuration for RDMA transport
 class Config {
@@ -19,6 +21,8 @@ public:
     size_t buffer_size = DEFAULT_BUFFER_SIZE;
     int cpu_core_id = 2;  // -1 means no CPU pinning
     int receiver_timeout_seconds = DEFAULT_RECEIVER_TIMEOUT_SECONDS;
+    enum ibv_qp_type transport_type = DEFAULT_RDMA_TRANSPORT;
+
 
     bool load_from_file(const std::string& filepath);
 

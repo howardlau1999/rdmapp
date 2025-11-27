@@ -147,7 +147,7 @@ int main(int argc, char *argv[]) {
 
   size_t buffer_size = DEFAULT_BUFFER_SIZE;
   size_t chunk_size = DEFAULT_CHUNK_SIZE;
-  enum ibv_qp_type qp_type = IBV_QPT_RC; // Default to RC
+  enum ibv_qp_type qp_type = IBV_QPT_RC;
 
   auto device = std::make_shared<rdmapp::device>(0, 1, 3);
   auto pd = std::make_shared<rdmapp::pd>(device);

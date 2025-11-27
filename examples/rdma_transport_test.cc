@@ -5,6 +5,7 @@
 #include "rdma_util.h"
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <future>
 #include <iostream>
@@ -12,7 +13,6 @@
 #include <random>
 #include <thread>
 #include <unistd.h>
-#include <cstdlib>
 
 #include <rdmapp/rdmapp.h>
 
@@ -20,34 +20,33 @@ using namespace RDMA_EC;
 
 // Allocate page-aligned buffer and fill with test data pattern
 // Returns the allocated buffer pointer (caller must free with free())
-void* allocate_test_data(size_t size) {
-  void* buffer = nullptr;
+void *allocate_test_data(size_t size) {
+  void *buffer = nullptr;
   size_t page_size = sysconf(_SC_PAGESIZE);
-  
+
   size_t aligned_size = ((size + page_size - 1) / page_size) * page_size;
-  
+
   if (posix_memalign(&buffer, page_size, aligned_size)) {
     perror("posix_memalign");
     return nullptr;
   }
-  
+
   // Fill with test pattern
-  uint8_t* data = static_cast<uint8_t*>(buffer);
+  uint8_t *data = static_cast<uint8_t *>(buffer);
   for (size_t i = 0; i < size; ++i) {
     data[i] = static_cast<uint8_t>((i * 7 + 42) % 256);
   }
-  
+
   // Zero out the padding area (if any)
   if (aligned_size > size) {
     memset(data + size, 0, aligned_size - size);
   }
-  
-  std::cout << "Allocated page-aligned buffer: size=" << size 
-            << ", aligned_size=" << aligned_size 
-            << ", page_size=" << page_size 
-            << ", addr=0x" << std::hex << reinterpret_cast<uintptr_t>(buffer) 
+
+  std::cout << "Allocated page-aligned buffer: size=" << size
+            << ", aligned_size=" << aligned_size << ", page_size=" << page_size
+            << ", addr=0x" << std::hex << reinterpret_cast<uintptr_t>(buffer)
             << std::dec << std::endl;
-  
+
   return buffer;
 }
 
@@ -109,7 +108,7 @@ int main(int argc, char *argv[]) {
   std::shared_ptr<rdmapp::cq_poller> send_cq_poller;
   auto loop = rdmapp::socket::event_loop::new_loop();
   auto looper = std::thread([loop]() { loop->loop(); });
-  
+
   std::optional<std::future<void>> receiver_future;
   std::optional<std::future<void>> sender_future;
 
@@ -158,10 +157,10 @@ int main(int argc, char *argv[]) {
       // send completions (CTS message)
       send_cq_poller = std::make_shared<rdmapp::cq_poller>(send_cq);
 
-      auto acceptor =
-          std::make_shared<rdmapp::acceptor>(loop, port, pd, recv_cq, send_cq);
+      auto acceptor = std::make_shared<rdmapp::acceptor>(
+          loop, port, pd, recv_cq, send_cq, nullptr, config.transport_type);
 
-        rdmapp::task<void> receiver_task = [acceptor, recv_cq, buffer_size,
+      rdmapp::task<void> receiver_task = [acceptor, recv_cq, buffer_size,
                                           config]() -> rdmapp::task<void> {
         RDMAReceiver receiver(acceptor, recv_cq, config);
 
@@ -175,20 +174,24 @@ int main(int argc, char *argv[]) {
         auto received_data = co_await receiver.receive_data(buffer_size);
 
         auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            end_time - start_time)
-                            .count();
+        auto duration_us =
+            std::chrono::duration_cast<std::chrono::microseconds>(end_time -
+                                                                  start_time)
+                .count();
+        auto duration_ms = duration_us / 1000.0;
 
         std::cout << "=== RECEIVER COMPLETE ===" << std::endl;
         std::cout << "Received " << receiver.get_packets_received()
                   << " packets, " << receiver.get_bytes_received() << " bytes"
                   << std::endl;
-        std::cout << "Transfer time: " << duration << " ms" << std::endl;
-        if (duration > 0) {
-          std::cout << "Throughput: "
-                    << (receiver.get_bytes_received() * 1000.0 / duration /
-                        1024 / 1024)
-                    << " MB/s" << std::endl;
+        std::cout << "Transfer time: " << duration_ms << " ms ("
+                  << duration_us / 1000000.0 << " seconds)" << std::endl;
+        if (duration_us > 0) {
+          long long bytes = receiver.get_bytes_received();
+          double mbits_per_sec = (bytes * 8.0) / duration_us;
+          double mb_per_sec = (bytes * 1000.0) / duration_ms / 1024 / 1024;
+          std::cout << "Throughput: " << mb_per_sec << " MB/s ("
+                    << mbits_per_sec << " Mbit/sec)" << std::endl;
         }
         co_return;
       }();
@@ -212,13 +215,14 @@ int main(int argc, char *argv[]) {
       recv_cq_poller = std::make_shared<rdmapp::cq_poller>(recv_cq);
 
       auto connector = std::make_shared<rdmapp::connector>(
-          loop, receiver_ip, port, pd, recv_cq, send_cq);
+          loop, receiver_ip, port, pd, recv_cq, send_cq, nullptr,
+          config.transport_type);
 
       rdmapp::task<void> sender_task = [connector, buffer_size,
                                         config]() -> rdmapp::task<void> {
         RDMASender sender(connector, config);
 
-        void* large_data_buffer = allocate_test_data(buffer_size);
+        void *large_data_buffer = allocate_test_data(buffer_size);
         if (!large_data_buffer) {
           std::cerr << "Failed to allocate page-aligned buffer" << std::endl;
           co_return;
@@ -234,21 +238,25 @@ int main(int argc, char *argv[]) {
         co_await sender.send_data(large_data_buffer, buffer_size);
 
         auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            end_time - start_time)
-                            .count();
+        auto duration_us =
+            std::chrono::duration_cast<std::chrono::microseconds>(end_time -
+                                                                  start_time)
+                .count();
+        auto duration_ms = duration_us / 1000.0;
 
         std::cout << "=== SENDER COMPLETE ===" << std::endl;
         std::cout << "Sent " << sender.get_packets_sent() << " packets, "
                   << sender.get_bytes_sent() << " bytes" << std::endl;
-        std::cout << "Transfer time: " << duration << " ms" << std::endl;
-        if (duration > 0) {
-          std::cout << "Throughput: "
-                    << (sender.get_bytes_sent() * 1000.0 / duration / 1024 /
-                        1024)
-                    << " MB/s" << std::endl;
+        std::cout << "Transfer time: " << duration_ms << " ms ("
+                  << duration_us / 1000000.0 << " seconds)" << std::endl;
+        if (duration_us > 0) {
+          long long bytes = sender.get_bytes_sent();
+          double mbits_per_sec = (bytes * 8.0) / duration_us;
+          double mb_per_sec = (bytes * 1000.0) / duration_ms / 1024 / 1024;
+          std::cout << "Throughput: " << mb_per_sec << " MB/s ("
+                    << mbits_per_sec << " Mbit/sec)" << std::endl;
         }
-        
+
         free(large_data_buffer);
         co_return;
       }();
@@ -266,11 +274,11 @@ int main(int argc, char *argv[]) {
                 << std::endl;
       return 1;
     }
-    
+
     if (!is_client_mode && receiver_future.has_value()) {
       try {
         receiver_future->wait();
-        receiver_future->get();  // This will throw if there was an exception
+        receiver_future->get(); // This will throw if there was an exception
         std::cout << "Receiver task completed successfully" << std::endl;
       } catch (const std::exception &e) {
         std::cerr << "Receiver task failed: " << e.what() << std::endl;
@@ -278,7 +286,7 @@ int main(int argc, char *argv[]) {
     } else if (is_client_mode && sender_future.has_value()) {
       try {
         sender_future->wait();
-        sender_future->get();  // This will throw if there was an exception
+        sender_future->get(); // This will throw if there was an exception
         std::cout << "Sender task completed successfully" << std::endl;
       } catch (const std::exception &e) {
         std::cerr << "Sender task failed: " << e.what() << std::endl;
