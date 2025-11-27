@@ -13,6 +13,7 @@
 #include <random>
 #include <thread>
 #include <unistd.h>
+#include <infiniband/verbs.h>
 
 #include <rdmapp/rdmapp.h>
 
@@ -168,6 +169,7 @@ int main(int argc, char *argv[]) {
         std::cout << "Expecting " << buffer_size << " bytes" << std::endl;
         std::cout << "MTU: " << config.mtu
                   << ", Chunk size: " << config.chunk_size << std::endl;
+        std::cout << ", Transport Type: " << ((config.transport_type == IBV_QPT_RC) ? "RC" : "UC") << std::endl;
 
         auto start_time = std::chrono::high_resolution_clock::now();
 

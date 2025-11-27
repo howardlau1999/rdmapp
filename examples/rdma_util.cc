@@ -39,6 +39,13 @@ bool Config::parse_line(const std::string &line) {
   std::string key = trim(trimmed.substr(0, eq_pos));
   std::string value = trim(trimmed.substr(eq_pos + 1));
 
+  // Strip quotes from value if present
+  if (value.size() >= 2 && 
+      ((value.front() == '"' && value.back() == '"') ||
+       (value.front() == '\'' && value.back() == '\''))) {
+    value = value.substr(1, value.size() - 2);
+  }
+
   if (key.empty()) {
     return false;
   }
@@ -62,6 +69,9 @@ bool Config::parse_line(const std::string &line) {
         transport_type = IBV_QPT_RC;
       } else if (value == "uc") {
         transport_type = IBV_QPT_UC;
+      } else {
+        std::cerr << "[Config] Warning: Unknown transport_type value: " << value 
+                  << " (expected 'rc' or 'uc'). Using default." << std::endl;
       }
     } else {
       std::cerr << "[Config] Unknown Config key: " << key << std::endl;
