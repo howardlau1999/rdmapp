@@ -248,17 +248,17 @@ int main(int argc, char *argv[]) {
                 .count();
         auto duration_ms = duration_us / 1000.0;
 
-        Logger::info() << "=== SENDER COMPLETE ===";
-        Logger::info() << "Sent " << sender.get_packets_sent() << " packets, "
-                  << sender.get_bytes_sent() << " bytes";
-        Logger::info() << "Transfer time: " << duration_ms << " ms ("
-                  << duration_us / 1000000.0 << " seconds)";
+        std::cout << "=== SENDER COMPLETE ===" << std:: endl; 
+        std::cout << "Sent " << sender.get_packets_sent() << " packets, "
+                  << sender.get_bytes_sent() << " bytes" << std::endl;
+        std::cout << "Transfer time: " << duration_ms << " ms ("
+                  << duration_us / 1000000.0 << " seconds)" << std:: endl;
         if (duration_us > 0) {
           long long bytes = sender.get_bytes_sent();
           double mbits_per_sec = (bytes * 8.0) / duration_us;
           double mb_per_sec = (bytes * 1000.0) / duration_ms / 1024 / 1024;
-          Logger::info() << "Throughput: " << mb_per_sec << " MB/s ("
-                    << mbits_per_sec << " Mbit/sec)";
+          std::cout << "Throughput: " << mb_per_sec << " MB/s ("
+                    << mbits_per_sec << " Mbit/sec)" << std:: endl;
         }
 
         free(large_data_buffer);
@@ -267,13 +267,13 @@ int main(int argc, char *argv[]) {
       sender_future = std::move(sender_task.get_future());
       sender_task.detach();
     } else {
-      Logger::error() << "Usage:";
-      Logger::error() << "  Receiver (server): " << argv[0] << " <port> [config_file]";
-      Logger::error() << "  Sender (client):   " << argv[0]
-                << " <receiver_ip> <port> [config_file]";
-      Logger::error() << "";
-      Logger::error() << "  config_file: Optional path to .config file (default: use "
-                   "built-in defaults)";
+      std::cout << "Usage:" << std:: endl;
+      std::cout << "  Receiver (server): " << argv[0] << " <port> [config_file]" << std:: endl;
+      std::cout << "  Sender (client):   " << argv[0] << std:: endl
+                << " <receiver_ip> <port> [config_file]" << std:: endl;
+      std::cout << "";
+      std::cout << "  config_file: Optional path to .config file (default: use "
+                   "built-in defaults)" << std:: endl;
       return 1;
     }
 
