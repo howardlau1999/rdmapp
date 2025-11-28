@@ -1,4 +1,5 @@
 #include "rdma_receiver.h"
+#include "rdma_logger.h"
 #include <iostream>
 #include <chrono>
 #include <cstring>
@@ -14,8 +15,9 @@ RDMAReceiver::RDMAReceiver(std::shared_ptr<rdmapp::acceptor> acceptor,
                            std::shared_ptr<rdmapp::cq> recv_cq,
                            const Config& config)
     : acceptor_(acceptor), recv_cq_(recv_cq), config_(config) {
-    std::cout << "Receiver: Initialized with MTU=" << config_.mtu 
-              << ", chunk_size=" << config_.chunk_size << std::endl;
+    Logger::set_enabled(config_.enable_logging);
+    Logger::info() << "Receiver: Initialized with MTU=" << config_.mtu 
+              << ", chunk_size=" << config_.chunk_size;
     dummy_recv_buffer_.resize(1);
 }
 
@@ -39,9 +41,9 @@ RDMAReceiver::~RDMAReceiver() {
 rdmapp::task<std::vector<uint8_t>> RDMAReceiver::receive_data(size_t expected_size) {
     expected_size_ = expected_size;
     
-    std::cout << "Receiver: Waiting for connection..." << std::endl;
+    Logger::info() << "Receiver: Waiting for connection...";
     qp_ = co_await acceptor_->accept();
-    std::cout << "Receiver: Connection accepted" << std::endl;
+    Logger::info() << "Receiver: Connection accepted";
     
     size_t page_size = sysconf(_SC_PAGESIZE);
     size_t aligned_size = ((config_.buffer_size + page_size - 1) / page_size) * page_size;
@@ -52,11 +54,11 @@ rdmapp::task<std::vector<uint8_t>> RDMAReceiver::receive_data(size_t expected_si
     }
     recv_buffer_size_ = aligned_size;
     
-    std::cout << "Receiver: Allocated page-aligned buffer: size=" << config_.buffer_size
+    Logger::info() << "Receiver: Allocated page-aligned buffer: size=" << config_.buffer_size
               << ", aligned_size=" << aligned_size 
               << ", page_size=" << page_size 
               << ", addr=0x" << std::hex << reinterpret_cast<uintptr_t>(recv_buffer_) 
-              << std::dec << std::endl;
+              << std::dec;
     
     auto pd = qp_->pd_ptr();
     local_mr_ = std::make_shared<rdmapp::local_mr>(
@@ -74,8 +76,8 @@ rdmapp::task<std::vector<uint8_t>> RDMAReceiver::receive_data(size_t expected_si
     // Initialize chunk bitmap
     chunk_bitmap_.store(0, std::memory_order_relaxed);
     
-    std::cout << "Receiver: Expecting " << total_packets_ << " packets in " 
-              << total_chunks_ << " chunks for " << expected_size << " bytes" << std::endl;
+    Logger::info() << "Receiver: Expecting " << total_packets_ << " packets in " 
+              << total_chunks_ << " chunks for " << expected_size << " bytes";
     
     // Post receives for immediate values
     // Must post before sending CTS
@@ -83,28 +85,28 @@ rdmapp::task<std::vector<uint8_t>> RDMAReceiver::receive_data(size_t expected_si
     
     // Verify dummy_recv_mr_ is set
     if (!dummy_recv_mr_) {
-        std::cerr << "Receiver: ERROR - dummy_recv_mr_ not set after post_receives!" << std::endl;
+        Logger::error() << "Receiver: ERROR - dummy_recv_mr_ not set after post_receives!";
         throw std::runtime_error("dummy_recv_mr_ not initialized");
     }
-    std::cout << "Receiver: Verified dummy_recv_mr_ is set (addr=0x" << std::hex 
+    Logger::info() << "Receiver: Verified dummy_recv_mr_ is set (addr=0x" << std::hex 
               << reinterpret_cast<uint64_t>(dummy_recv_mr_->addr()) << std::dec 
-              << ", length=" << dummy_recv_mr_->length() << ")" << std::endl;
+              << ", length=" << dummy_recv_mr_->length() << ")";
     
     // Verify all member variables are ready before starting threads
-    std::cout << "Receiver: Pre-thread checks - packet_bitmap_.size()=" << packet_bitmap_.size()
+    Logger::info() << "Receiver: Pre-thread checks - packet_bitmap_.size()=" << packet_bitmap_.size()
               << ", total_packets_=" << total_packets_ 
-              << ", total_chunks_=" << total_chunks_ << std::endl;
+              << ", total_chunks_=" << total_chunks_;
     
     // Start background threads BEFORE sending CTS
     // This ensures the completion thread is ready to poll receive completions
     // before cq_poller can consume them (if cq_poller is being used)
-    std::cout << "Receiver: Starting backend thread..." << std::endl;
+    Logger::info() << "Receiver: Starting backend thread...";
     completion_thread_ = std::thread(&RDMAReceiver::process_completions, this);
-    std::cout << "Receiver: Backend thread started successfully" << std::endl;
+    Logger::info() << "Receiver: Backend thread started successfully";
     
-    std::cout << "Receiver: Starting frontend thread..." << std::endl;
+    Logger::info() << "Receiver: Starting frontend thread...";
     frontend_thread_ = std::thread(&RDMAReceiver::frontend_poller, this);
-    std::cout << "Receiver: Frontend thread started successfully" << std::endl;
+    Logger::info() << "Receiver: Frontend thread started successfully";
     
     // Give threads a moment to start polling before we send CTS
     // This helps ensure the receiver's thread can get receive completions
@@ -123,8 +125,8 @@ rdmapp::task<std::vector<uint8_t>> RDMAReceiver::receive_data(size_t expected_si
         });
         
         if (!success) {
-            std::cout << "Receiver: Timeout waiting for packets (timeout: " 
-                      << config_.receiver_timeout_seconds << " seconds)" << std::endl;
+            Logger::info() << "Receiver: Timeout waiting for packets (timeout: " 
+                      << config_.receiver_timeout_seconds << " seconds)";
         }
     }
     
@@ -144,9 +146,9 @@ rdmapp::task<std::vector<uint8_t>> RDMAReceiver::receive_data(size_t expected_si
     uint8_t* recv_data = static_cast<uint8_t*>(recv_buffer_);
     std::vector<uint8_t> result(recv_data, recv_data + expected_size);
     
-    std::cout << "Receiver: Transfer complete. Received " 
+    Logger::info() << "Receiver: Transfer complete. Received " 
               << packets_received_.load() << " packets (" 
-              << expected_size << " bytes)" << std::endl;
+              << expected_size << " bytes)";
     
     co_return result;
 }
@@ -161,9 +163,9 @@ rdmapp::task<void> RDMAReceiver::send_cts(size_t buffer_size) {
     
     co_await qp_->send(&cts, sizeof(cts));
     
-    std::cout << "Receiver: Sent CTS - addr=0x" << std::hex 
+    Logger::info() << "Receiver: Sent CTS - addr=0x" << std::hex 
               << cts.remote_addr << ", rkey=0x" << cts.rkey 
-              << std::dec << std::endl;
+              << std::dec;
     
     co_return;
 }
@@ -185,15 +187,15 @@ rdmapp::task<void> RDMAReceiver::post_receives(size_t count) {
     size_t needed_receives = count;
     size_t initial_count = std::min(needed_receives, max_qp_capacity);
     
-    std::cout << "Receiver: Posting " << initial_count 
+    Logger::info() << "Receiver: Posting " << initial_count 
               << " receives (needed: " << needed_receives 
-              << ", QP capacity: " << max_qp_capacity << ")..." << std::endl;
+              << ", QP capacity: " << max_qp_capacity << "...";
     
     for (size_t i = 0; i < initial_count; ++i) {
         post_single_receive();
     }
     
-    std::cout << "Receiver: Posted " << initial_count << " initial receives" << std::endl;
+    Logger::info() << "Receiver: Posted " << initial_count << " initial receives";
     
     co_return;
 }
@@ -205,12 +207,12 @@ void RDMAReceiver::post_single_receive() {
     
     // Check if dummy_recv_mr_ and qp_ are initialized
     if (!mr) {
-        std::cerr << "Receiver: Error - dummy_recv_mr_ not initialized!" << std::endl;
+        Logger::error() << "Receiver: Error - dummy_recv_mr_ not initialized!";
         return;
     }
     
     if (!qp) {
-        std::cerr << "Receiver: Error - qp_ not initialized!" << std::endl;
+        Logger::error() << "Receiver: Error - qp_ not initialized!";
         return;
     }
     
@@ -232,10 +234,10 @@ void RDMAReceiver::post_single_receive() {
     try {
         qp->post_recv(recv_wr, bad_recv_wr);
     } catch (const std::exception& e) {
-        std::cerr << "Receiver: Failed to post receive: " << e.what() << std::endl;
+        Logger::error() << "Receiver: Failed to post receive: " << e.what();
         // Don't throw - just log, we'll try again later
     } catch (...) {
-        std::cerr << "Receiver: Unknown exception in post_recv!" << std::endl;
+        Logger::error() << "Receiver: Unknown exception in post_recv!";
     }
 }
 
@@ -247,15 +249,15 @@ void RDMAReceiver::process_completions() {
         CPU_SET(1, &cpuset);
         int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
         if (ret != 0) {
-            std::cerr << "Receiver: Warning - failed to set CPU affinity for backend thread: " 
-                      << ret << std::endl;
+            Logger::error() << "Receiver: Warning - failed to set CPU affinity for backend thread: " 
+                      << ret;
         } else {
-            std::cout << "Receiver: Pinned backend thread to CPU " 
-                      << sched_getcpu() << std::endl;
+            Logger::info() << "Receiver: Pinned backend thread to CPU " 
+                      << sched_getcpu();
         }
     }
     
-    std::cout << "Receiver: Backend thread started" << std::endl;
+    Logger::info() << "Receiver: Backend thread started";
     
     // Wait a bit to ensure dummy_recv_mr_, recv_cq_, and packet_bitmap_ are initialized
     // This is a safety measure - post_receives() should complete before threads start
@@ -263,22 +265,22 @@ void RDMAReceiver::process_completions() {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     
     if (!dummy_recv_mr_) {
-        std::cerr << "Receiver: FATAL - dummy_recv_mr_ not initialized in completion thread!" << std::endl;
+        Logger::error() << "Receiver: FATAL - dummy_recv_mr_ not initialized in completion thread!";
         return;
     }
     
     if (!recv_cq_) {
-        std::cerr << "Receiver: FATAL - recv_cq_ not initialized in completion thread!" << std::endl;
+        Logger::error() << "Receiver: FATAL - recv_cq_ not initialized in completion thread!";
         return;
     }
     
     if (packet_bitmap_.empty()) {
-        std::cerr << "Receiver: FATAL - packet_bitmap_ is empty in completion thread!" << std::endl;
+        Logger::error() << "Receiver: FATAL - packet_bitmap_ is empty in completion thread!";
         return;
     }
     
-    std::cout << "Receiver: Backend thread ready - packet_bitmap_.size()=" 
-              << packet_bitmap_.size() << ", total_packets_=" << total_packets_ << std::endl;
+    Logger::info() << "Receiver: Backend thread ready - packet_bitmap_.size()=" 
+              << packet_bitmap_.size() << ", total_packets_=" << total_packets_;
     
     constexpr size_t batch_size = 32;
     std::vector<struct ibv_wc> wc_vec(batch_size);
@@ -291,15 +293,15 @@ void RDMAReceiver::process_completions() {
     while (!stop_thread_) {
         // Poll the completion queue
         if (!recv_cq_) {
-            std::cerr << "Receiver: recv_cq_ is null!" << std::endl;
+            Logger::error() << "Receiver: recv_cq_ is null!";
             break;
         }
         size_t num_completions = recv_cq_->poll(wc_vec);
         total_polled += num_completions;
         
         if (num_completions > 0) {
-            std::cout << "[BACKEND] Polled " << num_completions << " completions (total polled: " 
-                      << total_polled << std::endl;
+            Logger::debug() << "[BACKEND] Polled " << num_completions << " completions (total polled: " 
+                      << total_polled;
         }
         
         // Reset counter for this batch
@@ -322,14 +324,14 @@ void RDMAReceiver::process_completions() {
                     rdmapp::executor::destroy_callback(cb);
                 } catch (...) {
                     // If callback invocation fails, log and continue
-                    std::cerr << "[BACKEND] Warning - failed to invoke callback for send completion" << std::endl;
+                    Logger::error() << "[BACKEND] Warning - failed to invoke callback for send completion";
                 }
                 continue; // Skip to next completion
             }
             
             // Verify this is actually a receive completion
             if (wc.opcode != IBV_WC_RECV && wc.opcode != IBV_WC_RECV_RDMA_WITH_IMM) {
-                std::cout << "[BACKEND] Warning - wr_id=RECV_MARKER but opcode=" << wc.opcode << ", skipping" << std::endl;
+                Logger::debug() << "[BACKEND] Warning - wr_id=RECV_MARKER but opcode=" << wc.opcode << ", skipping";
                 continue;
             }
             
@@ -338,8 +340,8 @@ void RDMAReceiver::process_completions() {
             
             // Check completion status
             if (wc.status != IBV_WC_SUCCESS) {
-                std::cout << "Receiver: Completion error: status=" << wc.status 
-                          << ", opcode=" << wc.opcode << std::endl;
+                Logger::error() << "Receiver: Completion error: status=" << wc.status 
+                          << ", opcode=" << wc.opcode;
                 continue;  // Still count for reposting
             }
             
@@ -351,21 +353,21 @@ void RDMAReceiver::process_completions() {
                 // Decode immediate value to get packet index
                 auto [msg_id, packet_idx] = decode_immediate(imm);
                 
-                std::cout << "[BACKEND] Received packet " << packet_idx 
+                Logger::debug() << "[BACKEND] Received packet " << packet_idx 
                           << " (msg_id=" << msg_id << ", imm=0x" << std::hex 
-                          << imm << std::dec << ")" << std::endl;
+                          << imm << std::dec << ")";
                 
                 // Verify message ID matches
                 if (msg_id != current_msg_id_ - 1) {
-                    std::cout << "Receiver: Warning - message ID mismatch: expected " 
-                              << (current_msg_id_ - 1) << ", got " << msg_id << std::endl;
+                    Logger::error() << "Receiver: Warning - message ID mismatch: expected " 
+                              << (current_msg_id_ - 1) << ", got " << msg_id;
                     continue;  // Still count for reposting
                 }
                 
                 // Verify packet index is valid
                 if (packet_idx >= total_packets_) {
-                    std::cout << "Receiver: Warning - invalid packet index: " 
-                              << packet_idx << " (max: " << total_packets_ << ")" << std::endl;
+                    Logger::error() << "Receiver: Warning - invalid packet index: " 
+                              << packet_idx << " (max: " << total_packets_ << ")";
                     continue;  // Still count for reposting
                 }
                 
@@ -375,14 +377,14 @@ void RDMAReceiver::process_completions() {
                 
                 // Safety checks - ensure packet_bitmap_ is valid and index is in range
                 if (packet_bitmap_.empty()) {
-                    std::cerr << "[BACKEND] FATAL - packet_bitmap_ is empty!" << std::endl;
+                    Logger::error() << "[BACKEND] FATAL - packet_bitmap_ is empty!";
                     continue;  // Still count for reposting
                 }
                 
                 if (bitmap_idx >= packet_bitmap_.size()) {
-                    std::cerr << "[BACKEND] FATAL - bitmap_idx " << bitmap_idx 
+                    Logger::error() << "[BACKEND] FATAL - bitmap_idx " << bitmap_idx 
                               << " >= packet_bitmap_.size() " << packet_bitmap_.size() 
-                              << " (packet_idx=" << packet_idx << ")" << std::endl;
+                              << " (packet_idx=" << packet_idx << ")";
                     continue;  // Still count for reposting
                 }
                 
@@ -393,17 +395,17 @@ void RDMAReceiver::process_completions() {
                 if ((old_val & bit_mask) == 0) {
                     // This is a new packet
                     packets_received_.fetch_add(1, std::memory_order_relaxed);
-                    std::cout << "[BACKEND] Marked packet " << packet_idx 
+                    Logger::debug() << "[BACKEND] Marked packet " << packet_idx 
                               << " in bitmap[" << bitmap_idx << "] (bitmask=0x" << std::hex 
                               << bit_mask << ", old=0x" << old_val << ", new=0x" 
-                              << (old_val | bit_mask) << std::dec << ")" << std::endl;
+                              << (old_val | bit_mask) << std::dec << ")";
                 } else {
-                    std::cout << "[BACKEND] Packet " << packet_idx 
-                              << " already marked (duplicate completion?)" << std::endl;
+                    Logger::debug() << "[BACKEND] Packet " << packet_idx 
+                              << " already marked (duplicate completion?)";
                 }
             } else {
-                std::cout << "[BACKEND] Completion without IMM: opcode=" << wc.opcode 
-                          << ", byte_len=" << wc.byte_len << " (skipping)" << std::endl;
+                Logger::debug() << "[BACKEND] Completion without IMM: opcode=" << wc.opcode 
+                          << ", byte_len=" << wc.byte_len << " (skipping)";
             }
         }
         
@@ -416,14 +418,14 @@ void RDMAReceiver::process_completions() {
                 post_single_receive();  // May fail silently, but we'll try again next cycle
             }
             if (receives_to_repost > 1) {
-                std::cout << "[BACKEND] Reposted " << receives_to_repost << " receives in batch" << std::endl;
+                Logger::debug() << "[BACKEND] Reposted " << receives_to_repost << " receives in batch";
             }
         }
         
         // Check if all packets have been received
         size_t received_count = packets_received_.load(std::memory_order_acquire);
         if (received_count >= total_packets_) {
-            std::cout << "Receiver: All " << total_packets_ << " packets received!" << std::endl;
+            Logger::info() << "Receiver: All " << total_packets_ << " packets received!";
             std::lock_guard<std::mutex> lock(completion_mutex_);
             reception_complete_ = true;
             completion_cv_.notify_all();
@@ -438,8 +440,8 @@ void RDMAReceiver::process_completions() {
         }
     }
     
-    std::cout << "Receiver: Backend thread exiting (total polled: " << total_polled 
-              << ", with IMM: " << total_with_imm << ")" << std::endl;
+    Logger::info() << "Receiver: Backend thread exiting (total polled: " << total_polled 
+              << ", with IMM: " << total_with_imm << ")";
 }
 
 void RDMAReceiver::frontend_poller() {
@@ -450,11 +452,11 @@ void RDMAReceiver::frontend_poller() {
         CPU_SET(2, &cpuset);
         int ret = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
         if (ret != 0) {
-            std::cerr << "Receiver: Warning - failed to set CPU affinity for frontend thread: " 
-                      << ret << std::endl;
+            Logger::error() << "Receiver: Warning - failed to set CPU affinity for frontend thread: " 
+                      << ret;
         } else {
-            std::cout << "Receiver: Pinned frontend thread to CPU " 
-                      << sched_getcpu() << std::endl;
+            Logger::info() << "Receiver: Pinned frontend thread to CPU " 
+                      << sched_getcpu();
         }
     }
     
@@ -476,10 +478,10 @@ void RDMAReceiver::frontend_poller() {
         (void)chunk_size;
         
     } catch (const std::exception& e) {
-        std::cerr << "[FRONTEND] Exception in frontend_poller: " << e.what() << std::endl;
+        Logger::error() << "[FRONTEND] Exception in frontend_poller: " << e.what();
         return;
     } catch (...) {
-        std::cerr << "[FRONTEND] Unknown exception in frontend_poller!" << std::endl;
+        Logger::error() << "[FRONTEND] Unknown exception in frontend_poller!";
         return;
     }
     
@@ -560,12 +562,8 @@ void RDMAReceiver::frontend_poller() {
         if (reception_complete_.load(std::memory_order_acquire)) {
             break;
         }
-        
-        // Small sleep to avoid busy-waiting
         std::this_thread::sleep_for(std::chrono::microseconds(100));
     }
-    
-    // std::cout << "[FRONTEND] Frontend poller thread exiting" << std::endl;
 }
 
 bool RDMAReceiver::is_complete() const {

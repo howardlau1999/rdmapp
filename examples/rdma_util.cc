@@ -73,6 +73,14 @@ bool Config::parse_line(const std::string &line) {
         std::cerr << "[Config] Warning: Unknown transport_type value: " << value 
                   << " (expected 'rc' or 'uc'). Using default." << std::endl;
       }
+    } else if (key == "enable_logging") {
+      std::transform(value.begin(), value.end(), value.begin(),
+                     [](unsigned char c) { return std::tolower(c); });
+      if (value == "true" || value == "1" || value == "yes") {
+        enable_logging = true;
+      } else if (value == "false" || value == "0" || value == "no") {
+        enable_logging = false;
+      }
     } else {
       std::cerr << "[Config] Unknown Config key: " << key << std::endl;
       return true;
@@ -109,6 +117,7 @@ bool Config::load_from_file(const std::string &filepath) {
 
   file.close();
 
+  // Config loading messages use std::cout directly (before logger is initialized)
   std::cout << "[Config] Loaded configuration from " << filepath << std::endl;
   if (has_errors) {
     std::cerr << "[Config] Some errors occurred while parsing config file"
@@ -133,9 +142,11 @@ bool Config::save_to_file(const std::string &filepath) const {
   file << "buffer_size=" << buffer_size << "\n";
   file << "cpu_core_id=" << cpu_core_id << "\n";
   file << "receiver_timeout_seconds=" << receiver_timeout_seconds << "\n";
+  file << "enable_logging=" << (enable_logging ? "true" : "false") << "\n";
 
   file.close();
 
+  // Config saving messages use std::cout directly
   std::cout << "[Config] Saved configuration to " << filepath << std::endl;
   return true;
 }
@@ -148,6 +159,7 @@ void Config::print() const {
   std::cout << "  cpu_core_id = " << cpu_core_id << std::endl;
   std::cout << "  receiver_timeout_seconds = " << receiver_timeout_seconds
             << std::endl;
+  std::cout << "  enable_logging = " << (enable_logging ? "true" : "false") << std::endl;
 }
 
 } // namespace RDMA_EC

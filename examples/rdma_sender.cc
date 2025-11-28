@@ -1,4 +1,5 @@
 #include "rdma_sender.h"
+#include "rdma_logger.h"
 #include <iostream>
 #include <cstring>
 
@@ -7,19 +8,20 @@ namespace RDMA_EC {
 RDMASender::RDMASender(std::shared_ptr<rdmapp::connector> connector, 
                        const Config& config)
     : connector_(connector), config_(config) {
-    std::cout << "Sender: Initialized with MTU=" << config_.mtu 
-              << ", chunk_size=" << config_.chunk_size << std::endl;
+    Logger::set_enabled(config_.enable_logging);
+    Logger::info() << "Sender: Initialized with MTU=" << config_.mtu 
+              << ", chunk_size=" << config_.chunk_size;
 }
 
 rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
-    std::cout << "Sender: Connecting..." << std::endl;
+    Logger::info() << "Sender: Connecting...";
     qp_ = co_await connector_->connect();
-    std::cout << "Sender: Connected" << std::endl;
+    Logger::info() << "Sender: Connected";
     
     co_await wait_for_cts();
-    std::cout << "Sender: Received CTS - remote_addr=0x" << std::hex 
+    Logger::info() << "Sender: Received CTS - remote_addr=0x" << std::hex 
               << cts_info_.remote_addr << ", rkey=0x" << cts_info_.rkey
-              << std::dec << ", packets=" << cts_info_.total_packets << std::endl;
+              << std::dec << ", packets=" << cts_info_.total_packets;
     
     auto pd = qp_->pd_ptr();
     local_mr_ = std::make_shared<rdmapp::local_mr>(
@@ -31,23 +33,23 @@ rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
     
     // Note: current_msg_id_ is set from CTS message, not incremented here
     
-    std::cout << "Sender: Sending " << size << " bytes in " 
+    Logger::info() << "Sender: Sending " << size << " bytes in " 
               << num_packets << " packets across " 
-              << num_chunks << " chunks" << std::endl;
+              << num_chunks << " chunks";
     
     for (size_t chunk_idx = 0; chunk_idx < num_chunks; ++chunk_idx) {
         size_t chunk_start_offset = chunk_idx * config_.chunk_size * config_.mtu;
         size_t packets_in_chunk = std::min(config_.chunk_size,
                                           num_packets - chunk_idx * config_.chunk_size);
-        std::cout << "Sender: Sending chunk " << chunk_idx << " with " << packets_in_chunk << " packets" << std::endl;
+        Logger::info() << "Sender: Sending chunk " << chunk_idx << " with " << packets_in_chunk << " packets";
         co_await send_chunk(chunk_idx, data_ptr, chunk_start_offset, packets_in_chunk);
     }
     
     packets_sent_ += num_packets;
     bytes_sent_ += size;
     
-    std::cout << "Sender: Transfer complete. Sent " << num_packets 
-              << " packets (" << size << " bytes)" << std::endl;
+    Logger::info() << "Sender: Transfer complete. Sent " << num_packets 
+              << " packets (" << size << " bytes)";
     
     co_return;
 }
@@ -91,8 +93,8 @@ rdmapp::task<void> RDMASender::send_packet(size_t packet_idx,
     
     uint32_t imm = encode_immediate(current_msg_id_, packet_idx);
     
-    std::cout << "Sender: Sending packet " << packet_idx << " offset=" << offset 
-                << " size=" << packet_size << " imm=0x" << std::hex << imm << std::dec << std::endl;
+    Logger::debug() << "Sender: Sending packet " << packet_idx << " offset=" << offset 
+                << " size=" << packet_size << " imm=0x" << std::hex << imm << std::dec;
 
     co_await qp_->write_with_imm(
         remote_mr,

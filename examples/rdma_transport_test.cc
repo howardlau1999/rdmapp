@@ -3,6 +3,7 @@
 #include "rdma_receiver.h"
 #include "rdma_sender.h"
 #include "rdma_util.h"
+#include "rdma_logger.h"
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
@@ -43,10 +44,10 @@ void *allocate_test_data(size_t size) {
     memset(data + size, 0, aligned_size - size);
   }
 
-  std::cout << "Allocated page-aligned buffer: size=" << size
+  Logger::info() << "Allocated page-aligned buffer: size=" << size
             << ", aligned_size=" << aligned_size << ", page_size=" << page_size
             << ", addr=0x" << std::hex << reinterpret_cast<uintptr_t>(buffer)
-            << std::dec << std::endl;
+            << std::dec;
 
   return buffer;
 }
@@ -66,8 +67,8 @@ std::vector<uint8_t> generate_test_data(size_t size) {
 bool verify_data(const std::vector<uint8_t> &sent,
                  const std::vector<uint8_t> &received) {
   if (sent.size() != received.size()) {
-    std::cerr << "Size mismatch: sent " << sent.size() << " vs received "
-              << received.size() << std::endl;
+    Logger::error() << "Size mismatch: sent " << sent.size() << " vs received "
+              << received.size();
     return false;
   }
 
@@ -81,16 +82,16 @@ bool verify_data(const std::vector<uint8_t> &sent,
   }
 
   if (first_mismatch != SIZE_MAX) {
-    std::cerr << "Data mismatch at byte " << first_mismatch << ": expected "
+    Logger::error() << "Data mismatch at byte " << first_mismatch << ": expected "
               << static_cast<int>(sent[first_mismatch]) << " got "
-              << static_cast<int>(received[first_mismatch]) << std::endl;
-    std::cerr << "Showing first 10 mismatches:" << std::endl;
+              << static_cast<int>(received[first_mismatch]);
+    Logger::error() << "Showing first 10 mismatches:";
     size_t shown = 0;
     for (size_t i = first_mismatch; i < sent.size() && shown < 10; ++i) {
       if (sent[i] != received[i]) {
-        std::cerr << "  Byte " << i << ": expected "
+        Logger::error() << "  Byte " << i << ": expected "
                   << static_cast<int>(sent[i]) << " got "
-                  << static_cast<int>(received[i]) << std::endl;
+                  << static_cast<int>(received[i]);
         shown++;
       }
     }
@@ -131,13 +132,15 @@ int main(int argc, char *argv[]) {
 
     if (!config_file.empty()) {
       if (config.load_from_file(config_file)) {
-        std::cout << "Loaded configuration from " << config_file << std::endl;
+        Logger::info() << "Loaded configuration from " << config_file;
         config.print();
       } else {
-        std::cout << "Warning: Failed to load config file, using defaults"
-                  << std::endl;
+        Logger::info() << "Warning: Failed to load config file, using defaults";
       }
     }
+    
+    // Initialize logger with config
+    Logger::set_enabled(config.enable_logging);
 
     size_t buffer_size = config.buffer_size;
 
@@ -145,7 +148,7 @@ int main(int argc, char *argv[]) {
       // Server mode: [port] [config_file] - acts as receiver (listens for
       // connections)
       int port = std::stoi(argv[1]);
-      std::cout << "Starting as RECEIVER on port " << port << std::endl;
+      Logger::info() << "Starting as RECEIVER on port " << port;
 
       config.buffer_size = buffer_size * 2;
 
@@ -165,11 +168,11 @@ int main(int argc, char *argv[]) {
                                           config]() -> rdmapp::task<void> {
         RDMAReceiver receiver(acceptor, recv_cq, config);
 
-        std::cout << "\n=== RECEIVER STARTING ===" << std::endl;
-        std::cout << "Expecting " << buffer_size << " bytes" << std::endl;
-        std::cout << "MTU: " << config.mtu
-                  << ", Chunk size: " << config.chunk_size << std::endl;
-        std::cout << ", Transport Type: " << ((config.transport_type == IBV_QPT_RC) ? "RC" : "UC") << std::endl;
+        Logger::info() << "\n=== RECEIVER STARTING ===";
+        Logger::info() << "Expecting " << buffer_size << " bytes";
+        Logger::info() << "MTU: " << config.mtu
+                  << ", Chunk size: " << config.chunk_size;
+        Logger::info() << ", Transport Type: " << ((config.transport_type == IBV_QPT_RC) ? "RC" : "UC");
 
         auto start_time = std::chrono::high_resolution_clock::now();
 
@@ -182,18 +185,17 @@ int main(int argc, char *argv[]) {
                 .count();
         auto duration_ms = duration_us / 1000.0;
 
-        std::cout << "=== RECEIVER COMPLETE ===" << std::endl;
-        std::cout << "Received " << receiver.get_packets_received()
-                  << " packets, " << receiver.get_bytes_received() << " bytes"
-                  << std::endl;
-        std::cout << "Transfer time: " << duration_ms << " ms ("
-                  << duration_us / 1000000.0 << " seconds)" << std::endl;
+        Logger::info() << "=== RECEIVER COMPLETE ===";
+        Logger::info() << "Received " << receiver.get_packets_received()
+                  << " packets, " << receiver.get_bytes_received() << " bytes";
+        Logger::info() << "Transfer time: " << duration_ms << " ms ("
+                  << duration_us / 1000000.0 << " seconds)";
         if (duration_us > 0) {
           long long bytes = receiver.get_bytes_received();
           double mbits_per_sec = (bytes * 8.0) / duration_us;
           double mb_per_sec = (bytes * 1000.0) / duration_ms / 1024 / 1024;
-          std::cout << "Throughput: " << mb_per_sec << " MB/s ("
-                    << mbits_per_sec << " Mbit/sec)" << std::endl;
+          Logger::info() << "Throughput: " << mb_per_sec << " MB/s ("
+                    << mbits_per_sec << " Mbit/sec)";
         }
         co_return;
       }();
@@ -205,8 +207,8 @@ int main(int argc, char *argv[]) {
       std::string receiver_ip = argv[1];
       int port_idx = 2;
       int port = std::stoi(argv[port_idx]);
-      std::cout << "Starting as SENDER connecting to " << receiver_ip << ":"
-                << port << std::endl;
+      Logger::info() << "Starting as SENDER connecting to " << receiver_ip << ":"
+                << port;
 
       config.buffer_size = buffer_size * 2;
 
@@ -226,14 +228,14 @@ int main(int argc, char *argv[]) {
 
         void *large_data_buffer = allocate_test_data(buffer_size);
         if (!large_data_buffer) {
-          std::cerr << "Failed to allocate page-aligned buffer" << std::endl;
+          Logger::error() << "Failed to allocate page-aligned buffer";
           co_return;
         }
 
-        std::cout << "\n=== SENDER STARTING ===" << std::endl;
-        std::cout << "Sending " << buffer_size << " bytes" << std::endl;
-        std::cout << "MTU: " << config.mtu
-                  << ", Chunk size: " << config.chunk_size << std::endl;
+        Logger::info() << "\n=== SENDER STARTING ===";
+        Logger::info() << "Sending " << buffer_size << " bytes";
+        Logger::info() << "MTU: " << config.mtu
+                  << ", Chunk size: " << config.chunk_size;
 
         auto start_time = std::chrono::high_resolution_clock::now();
 
@@ -246,17 +248,17 @@ int main(int argc, char *argv[]) {
                 .count();
         auto duration_ms = duration_us / 1000.0;
 
-        std::cout << "=== SENDER COMPLETE ===" << std::endl;
-        std::cout << "Sent " << sender.get_packets_sent() << " packets, "
-                  << sender.get_bytes_sent() << " bytes" << std::endl;
-        std::cout << "Transfer time: " << duration_ms << " ms ("
-                  << duration_us / 1000000.0 << " seconds)" << std::endl;
+        Logger::info() << "=== SENDER COMPLETE ===";
+        Logger::info() << "Sent " << sender.get_packets_sent() << " packets, "
+                  << sender.get_bytes_sent() << " bytes";
+        Logger::info() << "Transfer time: " << duration_ms << " ms ("
+                  << duration_us / 1000000.0 << " seconds)";
         if (duration_us > 0) {
           long long bytes = sender.get_bytes_sent();
           double mbits_per_sec = (bytes * 8.0) / duration_us;
           double mb_per_sec = (bytes * 1000.0) / duration_ms / 1024 / 1024;
-          std::cout << "Throughput: " << mb_per_sec << " MB/s ("
-                    << mbits_per_sec << " Mbit/sec)" << std::endl;
+          Logger::info() << "Throughput: " << mb_per_sec << " MB/s ("
+                    << mbits_per_sec << " Mbit/sec)";
         }
 
         free(large_data_buffer);
@@ -265,15 +267,13 @@ int main(int argc, char *argv[]) {
       sender_future = std::move(sender_task.get_future());
       sender_task.detach();
     } else {
-      std::cerr << "Usage:" << std::endl;
-      std::cerr << "  Receiver (server): " << argv[0] << " <port> [config_file]"
-                << std::endl;
-      std::cerr << "  Sender (client):   " << argv[0]
-                << " <receiver_ip> <port> [config_file]" << std::endl;
-      std::cerr << std::endl;
-      std::cerr << "  config_file: Optional path to .config file (default: use "
-                   "built-in defaults)"
-                << std::endl;
+      Logger::error() << "Usage:";
+      Logger::error() << "  Receiver (server): " << argv[0] << " <port> [config_file]";
+      Logger::error() << "  Sender (client):   " << argv[0]
+                << " <receiver_ip> <port> [config_file]";
+      Logger::error() << "";
+      Logger::error() << "  config_file: Optional path to .config file (default: use "
+                   "built-in defaults)";
       return 1;
     }
 
@@ -281,21 +281,21 @@ int main(int argc, char *argv[]) {
       try {
         receiver_future->wait();
         receiver_future->get(); // This will throw if there was an exception
-        std::cout << "Receiver task completed successfully" << std::endl;
+        Logger::info() << "Receiver task completed successfully";
       } catch (const std::exception &e) {
-        std::cerr << "Receiver task failed: " << e.what() << std::endl;
+        Logger::error() << "Receiver task failed: " << e.what();
       }
     } else if (is_client_mode && sender_future.has_value()) {
       try {
         sender_future->wait();
         sender_future->get(); // This will throw if there was an exception
-        std::cout << "Sender task completed successfully" << std::endl;
+        Logger::info() << "Sender task completed successfully";
       } catch (const std::exception &e) {
-        std::cerr << "Sender task failed: " << e.what() << std::endl;
+        Logger::error() << "Sender task failed: " << e.what();
       }
     }
   } catch (const std::exception &e) {
-    std::cerr << "Error: " << e.what() << std::endl;
+    Logger::error() << "Error: " << e.what();
     return 1;
   }
 
