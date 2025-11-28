@@ -150,6 +150,13 @@ rdmapp::task<std::vector<uint8_t>> RDMAReceiver::receive_data(size_t expected_si
               << packets_received_.load() << " packets (" 
               << expected_size << " bytes)";
     
+    // Send confirmation to sender that all packets were received
+    // This allows the sender to exit safely after receiver has processed everything
+    uint32_t ack = 0xDEADBEEF;
+    Logger::info() << "Receiver: Sending confirmation to sender...";
+    co_await qp_->send(&ack, sizeof(ack));
+    Logger::info() << "Receiver: Confirmation sent";
+    
     co_return result;
 }
 
