@@ -152,10 +152,10 @@ rdmapp::task<std::vector<uint8_t>> RDMAReceiver::receive_data(size_t expected_si
     
     // Send confirmation to sender that all packets were received
     // This allows the sender to exit safely after receiver has processed everything
-    uint32_t ack = 0xDEADBEEF;
-    Logger::info() << "Receiver: Sending confirmation to sender...";
-    co_await qp_->send(&ack, sizeof(ack));
-    Logger::info() << "Receiver: Confirmation sent";
+    // uint32_t ack = 0xDEADBEEF;
+    // Logger::info() << "Receiver: Sending confirmation to sender...";
+    // co_await qp_->send(&ack, sizeof(ack));
+    // Logger::info() << "Receiver: Confirmation sent";
     
     co_return result;
 }
@@ -242,7 +242,6 @@ void RDMAReceiver::post_single_receive() {
         qp->post_recv(recv_wr, bad_recv_wr);
     } catch (const std::exception& e) {
         Logger::error() << "Receiver: Failed to post receive: " << e.what();
-        // Don't throw - just log, we'll try again later
     } catch (...) {
         Logger::error() << "Receiver: Unknown exception in post_recv!";
     }
@@ -342,7 +341,8 @@ void RDMAReceiver::process_completions() {
                 continue;
             }
             
-            // Count this receive completion for reposting (we'll repost in batch at the end)
+            // Always repost receives - the completion consumes the receive work request
+            // Even if it's a duplicate packet, we need to repost to keep the receive queue full
             receives_to_repost++;
             
             // Check completion status

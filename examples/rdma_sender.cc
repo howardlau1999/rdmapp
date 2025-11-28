@@ -53,14 +53,14 @@ rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
     
     // Wait for receiver to confirm all packets received
     // This ensures the receiver has processed all completions before we exit
-    Logger::info() << "Sender: Waiting for receiver confirmation...";
-    uint32_t ack = 0;
-    auto [bytes, imm_opt] = co_await qp_->recv(&ack, sizeof(ack));
-    if (bytes == sizeof(ack) && ack == 0xDEADBEEF) {
-        Logger::info() << "Sender: Received confirmation from receiver";
-    } else {
-        Logger::error() << "Sender: Invalid confirmation from receiver (bytes=" << bytes << ", ack=0x" << std::hex << ack << std::dec << ")";
-    }
+    // Logger::info() << "Sender: Waiting for receiver confirmation...";
+    // uint32_t ack = 0;
+    // auto [bytes, imm_opt] = co_await qp_->recv(&ack, sizeof(ack));
+    // if (bytes == sizeof(ack) && ack == 0xDEADBEEF) {
+    //     Logger::info() << "Sender: Received confirmation from receiver";
+    // } else {
+    //     Logger::error() << "Sender: Invalid confirmation from receiver (bytes=" << bytes << ", ack=0x" << std::hex << ack << std::dec << ")";
+    // }
     
     co_return;
 }
