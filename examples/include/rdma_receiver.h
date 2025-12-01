@@ -20,7 +20,7 @@ public:
     ~RDMAReceiver();
     
     // Receive data from sender
-    rdmapp::task<std::vector<uint8_t>> receive_data(size_t expected_size);
+    rdmapp::task<void> receive_data(size_t expected_size);
     
     // Get statistics
     size_t get_packets_received() const { return packets_received_; }

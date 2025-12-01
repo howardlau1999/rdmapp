@@ -171,7 +171,7 @@ int main(int argc, char *argv[]) {
 
         auto start_time = std::chrono::high_resolution_clock::now();
 
-        auto received_data = co_await receiver.receive_data(buffer_size);
+        co_await receiver.receive_data(buffer_size);
 
         auto end_time = std::chrono::high_resolution_clock::now();
         auto duration_us =
@@ -244,7 +244,7 @@ int main(int argc, char *argv[]) {
                 .count();
         auto duration_ms = duration_us / 1000.0;
 
-        std::cout << "=== SENDER COMPLETE ===";
+        std::cout << "=== SENDER COMPLETE ===" << std::endl;
         std::cout << "Sent " << sender.get_packets_sent() << " packets, "
                   << sender.get_bytes_sent() << " bytes" << std::endl;
         std::cout << "Transfer time: " << duration_ms << " ms ("

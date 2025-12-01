@@ -39,7 +39,7 @@ RDMAReceiver::~RDMAReceiver() {
   }
 }
 
-rdmapp::task<std::vector<uint8_t>> RDMAReceiver::receive_data(size_t expected_size) {
+rdmapp::task<void> RDMAReceiver::receive_data(size_t expected_size) {
     expected_size_ = expected_size;
     
     Logger::info() << "Receiver: Waiting for connection...";
@@ -118,7 +118,7 @@ rdmapp::task<std::vector<uint8_t>> RDMAReceiver::receive_data(size_t expected_si
     // Give threads a moment to start polling before we send CTS
     // This helps ensure the receiver's thread can get receive completions
     // before cq_poller (if used) starts consuming them
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    //std::this_thread::sleep_for(std::chrono::milliseconds(50));
     
     // Send CTS to sender (this requires cq_poller to process send completion)
     co_await send_cts(expected_size);
@@ -150,21 +150,14 @@ rdmapp::task<std::vector<uint8_t>> RDMAReceiver::receive_data(size_t expected_si
     bytes_received_ = expected_size;
     
     // Return the received data (copy from page-aligned buffer)
-    uint8_t* recv_data = static_cast<uint8_t*>(recv_buffer_);
-    std::vector<uint8_t> result(recv_data, recv_data + expected_size);
+    // uint8_t* recv_data = static_cast<uint8_t*>(recv_buffer_);
+    // std::vector<uint8_t> result(recv_data, recv_data + expected_size);
     
     Logger::info() << "Receiver: Transfer complete. Received " 
               << packets_received_.load() << " packets (" 
               << expected_size << " bytes)";
-    
-    // Send confirmation to sender that all packets were received
-    // This allows the sender to exit safely after receiver has processed everything
-    // uint32_t ack = 0xDEADBEEF;
-    // Logger::info() << "Receiver: Sending confirmation to sender...";
-    // co_await qp_->send(&ack, sizeof(ack));
-    // Logger::info() << "Receiver: Confirmation sent";
-    
-    co_return result;
+
+    co_return;
 }
 
 rdmapp::task<void> RDMAReceiver::send_cts(size_t buffer_size) {
@@ -599,7 +592,7 @@ void RDMAReceiver::frontend_poller() {
     if (reception_complete_.load(std::memory_order_acquire)) {
       break;
     }
-    std::this_thread::sleep_for(std::chrono::microseconds(100));
+    //std::this_thread::sleep_for(std::chrono::microseconds(100));
   }
 }
 
