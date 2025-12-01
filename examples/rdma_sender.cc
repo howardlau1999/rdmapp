@@ -49,6 +49,7 @@ rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
                                           num_packets - chunk_idx * config_.chunk_size);
         Logger::info() << "Sender: Sending chunk " << chunk_idx << " with " << packets_in_chunk << " packets";
         co_await send_chunk(chunk_idx, data_ptr, chunk_start_offset, packets_in_chunk);
+        //std::this_thread::sleep_for(std::chrono::milliseconds(5)); //TODO
     }
     
     packets_sent_ += num_packets;
@@ -56,18 +57,7 @@ rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
     
     Logger::info() << "Sender: Transfer complete. Sent " << num_packets 
               << " packets (" << size << " bytes)";
-    
-    // Wait for receiver to confirm all packets received
-    // This ensures the receiver has processed all completions before we exit
-    // Logger::info() << "Sender: Waiting for receiver confirmation...";
-    // uint32_t ack = 0;
-    // auto [bytes, imm_opt] = co_await qp_->recv(&ack, sizeof(ack));
-    // if (bytes == sizeof(ack) && ack == 0xDEADBEEF) {
-    //     Logger::info() << "Sender: Received confirmation from receiver";
-    // } else {
-    //     Logger::error() << "Sender: Invalid confirmation from receiver (bytes=" << bytes << ", ack=0x" << std::hex << ack << std::dec << ")";
-    // }
-    
+        
     co_return;
 }
 
@@ -102,7 +92,6 @@ rdmapp::task<void> RDMASender::send_packet(size_t packet_idx,
                                            const uint8_t* data,
                                            size_t offset,
                                            size_t packet_size) {
-    // Create remote memory region for this packet at the offset
     rdmapp::remote_mr remote_mr(
         reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(cts_info_.remote_addr) + offset),
         static_cast<uint32_t>(packet_size),

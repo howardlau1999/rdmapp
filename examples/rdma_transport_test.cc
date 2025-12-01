@@ -1,9 +1,9 @@
 #include "acceptor.h"
 #include "connector.h"
+#include "rdma_logger.h"
 #include "rdma_receiver.h"
 #include "rdma_sender.h"
 #include "rdma_util.h"
-#include "rdma_logger.h"
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
@@ -14,14 +14,13 @@
 #include <random>
 #include <thread>
 #include <unistd.h>
+
 #include <infiniband/verbs.h>
 
 #include <rdmapp/rdmapp.h>
 
 using namespace RDMA_EC;
 
-// Allocate page-aligned buffer and fill with test data pattern
-// Returns the allocated buffer pointer (caller must free with free())
 void *allocate_test_data(size_t size) {
   void *buffer = nullptr;
   size_t page_size = sysconf(_SC_PAGESIZE);
@@ -33,30 +32,26 @@ void *allocate_test_data(size_t size) {
     return nullptr;
   }
 
-  // Fill with test pattern
   uint8_t *data = static_cast<uint8_t *>(buffer);
   for (size_t i = 0; i < size; ++i) {
     data[i] = static_cast<uint8_t>((i * 7 + 42) % 256);
   }
 
-  // Zero out the padding area (if any)
   if (aligned_size > size) {
     memset(data + size, 0, aligned_size - size);
   }
 
   Logger::info() << "Allocated page-aligned buffer: size=" << size
-            << ", aligned_size=" << aligned_size << ", page_size=" << page_size
-            << ", addr=0x" << std::hex << reinterpret_cast<uintptr_t>(buffer)
-            << std::dec;
+                 << ", aligned_size=" << aligned_size
+                 << ", page_size=" << page_size << ", addr=0x" << std::hex
+                 << reinterpret_cast<uintptr_t>(buffer) << std::dec;
 
   return buffer;
 }
 
-// Generate test data with pattern (kept for receiver verification)
 std::vector<uint8_t> generate_test_data(size_t size) {
   std::vector<uint8_t> data(size);
 
-  // Create a pattern for verification
   for (size_t i = 0; i < size; ++i) {
     data[i] = static_cast<uint8_t>((i * 7 + 42) % 256);
   }
@@ -68,7 +63,7 @@ bool verify_data(const std::vector<uint8_t> &sent,
                  const std::vector<uint8_t> &received) {
   if (sent.size() != received.size()) {
     Logger::error() << "Size mismatch: sent " << sent.size() << " vs received "
-              << received.size();
+                    << received.size();
     return false;
   }
 
@@ -82,16 +77,16 @@ bool verify_data(const std::vector<uint8_t> &sent,
   }
 
   if (first_mismatch != SIZE_MAX) {
-    Logger::error() << "Data mismatch at byte " << first_mismatch << ": expected "
-              << static_cast<int>(sent[first_mismatch]) << " got "
-              << static_cast<int>(received[first_mismatch]);
+    Logger::error() << "Data mismatch at byte " << first_mismatch
+                    << ": expected " << static_cast<int>(sent[first_mismatch])
+                    << " got " << static_cast<int>(received[first_mismatch]);
     Logger::error() << "Showing first 10 mismatches:";
     size_t shown = 0;
     for (size_t i = first_mismatch; i < sent.size() && shown < 10; ++i) {
       if (sent[i] != received[i]) {
         Logger::error() << "  Byte " << i << ": expected "
-                  << static_cast<int>(sent[i]) << " got "
-                  << static_cast<int>(received[i]);
+                        << static_cast<int>(sent[i]) << " got "
+                        << static_cast<int>(received[i]);
         shown++;
       }
     }
@@ -138,7 +133,7 @@ int main(int argc, char *argv[]) {
         Logger::info() << "Warning: Failed to load config file, using defaults";
       }
     }
-    
+
     Logger::set_enabled(config.enable_logging);
 
     size_t buffer_size = config.buffer_size;
@@ -170,8 +165,9 @@ int main(int argc, char *argv[]) {
         Logger::info() << "\n=== RECEIVER STARTING ===";
         Logger::info() << "Expecting " << buffer_size << " bytes";
         Logger::info() << "MTU: " << config.mtu
-                  << ", Chunk size: " << config.chunk_size;
-        Logger::info() << ", Transport Type: " << ((config.transport_type == IBV_QPT_RC) ? "RC" : "UC");
+                       << ", Chunk size: " << config.chunk_size;
+        Logger::info() << ", Transport Type: "
+                       << ((config.transport_type == IBV_QPT_RC) ? "RC" : "UC");
 
         auto start_time = std::chrono::high_resolution_clock::now();
 
@@ -186,15 +182,16 @@ int main(int argc, char *argv[]) {
 
         Logger::info() << "=== RECEIVER COMPLETE ===";
         Logger::info() << "Received " << receiver.get_packets_received()
-                  << " packets, " << receiver.get_bytes_received() << " bytes";
+                       << " packets, " << receiver.get_bytes_received()
+                       << " bytes";
         Logger::info() << "Transfer time: " << duration_ms << " ms ("
-                  << duration_us / 1000000.0 << " seconds)";
+                       << duration_us / 1000000.0 << " seconds)";
         if (duration_us > 0) {
           long long bytes = receiver.get_bytes_received();
           double mbits_per_sec = (bytes * 8.0) / duration_us;
           double mb_per_sec = (bytes * 1000.0) / duration_ms / 1024 / 1024;
           Logger::info() << "Throughput: " << mb_per_sec << " MB/s ("
-                    << mbits_per_sec << " Mbit/sec)";
+                         << mbits_per_sec << " Mbit/sec)";
         }
         co_return;
       }();
@@ -206,8 +203,8 @@ int main(int argc, char *argv[]) {
       std::string receiver_ip = argv[1];
       int port_idx = 2;
       int port = std::stoi(argv[port_idx]);
-      Logger::info() << "Starting as SENDER connecting to " << receiver_ip << ":"
-                << port;
+      Logger::info() << "Starting as SENDER connecting to " << receiver_ip
+                     << ":" << port;
 
       config.buffer_size = buffer_size * 2;
 
@@ -234,7 +231,7 @@ int main(int argc, char *argv[]) {
         Logger::info() << "\n=== SENDER STARTING ===";
         Logger::info() << "Sending " << buffer_size << " bytes";
         Logger::info() << "MTU: " << config.mtu
-                  << ", Chunk size: " << config.chunk_size;
+                       << ", Chunk size: " << config.chunk_size;
 
         auto start_time = std::chrono::high_resolution_clock::now();
 
@@ -249,15 +246,15 @@ int main(int argc, char *argv[]) {
 
         Logger::info() << "=== SENDER COMPLETE ===";
         Logger::info() << "Sent " << sender.get_packets_sent() << " packets, "
-                  << sender.get_bytes_sent() << " bytes";
+                       << sender.get_bytes_sent() << " bytes";
         Logger::info() << "Transfer time: " << duration_ms << " ms ("
-                  << duration_us / 1000000.0 << " seconds)";
+                       << duration_us / 1000000.0 << " seconds)";
         if (duration_us > 0) {
           long long bytes = sender.get_bytes_sent();
           double mbits_per_sec = (bytes * 8.0) / duration_us;
           double mb_per_sec = (bytes * 1000.0) / duration_ms / 1024 / 1024;
           Logger::info() << "Throughput: " << mb_per_sec << " MB/s ("
-                    << mbits_per_sec << " Mbit/sec)";
+                         << mbits_per_sec << " Mbit/sec)";
         }
 
         free(large_data_buffer);
@@ -267,12 +264,14 @@ int main(int argc, char *argv[]) {
       sender_task.detach();
     } else {
       Logger::error() << "Usage:";
-      Logger::error() << "  Receiver (server): " << argv[0] << " <port> [config_file]";
-      Logger::error() << "  Sender (client):   " << argv[0] 
-                << " <receiver_ip> <port> [config_file]";
+      Logger::error() << "  Receiver (server): " << argv[0]
+                      << " <port> [config_file]";
+      Logger::error() << "  Sender (client):   " << argv[0]
+                      << " <receiver_ip> <port> [config_file]";
       Logger::error() << "";
-      Logger::error() << "  config_file: Optional path to .config file (default: use "
-                   "built-in defaults)";
+      Logger::error()
+          << "  config_file: Optional path to .config file (default: use "
+             "built-in defaults)";
       return 1;
     }
 
