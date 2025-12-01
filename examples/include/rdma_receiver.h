@@ -73,7 +73,7 @@ private:
     std::atomic<bool> reception_complete_{false};
     
     // Message ID
-    uint16_t current_msg_id_{0};
+    uint8_t current_msg_id_{0};
     
     // Statistics
     std::atomic<size_t> packets_received_{0};
