@@ -19,7 +19,7 @@ RDMAReceiver::RDMAReceiver(std::shared_ptr<rdmapp::acceptor> acceptor,
   Logger::set_enabled(config_.enable_logging);
   Logger::info() << "Receiver: Initialized with MTU=" << config_.mtu
                  << ", chunk_size=" << config_.chunk_size;
-  dummy_recv_buffer_.resize(1);
+  oob_buffer_.resize(1);
 }
 
 RDMAReceiver::~RDMAReceiver() {
@@ -89,16 +89,17 @@ rdmapp::task<void> RDMAReceiver::receive_data(size_t expected_size) {
 
   co_await post_receives(total_packets_);
 
-  // Verify dummy_recv_mr_ is set
-  if (!dummy_recv_mr_) {
+  if (!oob_buffer_mr_) {
     Logger::error()
         << "Receiver: ERROR - dummy_recv_mr_ not set after post_receives!";
     throw std::runtime_error("dummy_recv_mr_ not initialized");
   }
+
   Logger::info() << "Receiver: Verified dummy_recv_mr_ is set (addr=0x"
                  << std::hex
-                 << reinterpret_cast<uint64_t>(dummy_recv_mr_->addr())
-                 << std::dec << ", length=" << dummy_recv_mr_->length() << ")";
+                 << reinterpret_cast<uint64_t>(oob_buffer_mr_->addr())
+                 << std::dec << ", length=" << oob_buffer_mr_->length() <<
+                 ")";
 
   Logger::info() << "Receiver: Pre-thread checks - packet_bitmap_.size()="
                  << packet_bitmap_.size()
@@ -161,16 +162,15 @@ rdmapp::task<void> RDMAReceiver::send_cts(size_t buffer_size) {
 }
 
 rdmapp::task<void> RDMAReceiver::post_receives(size_t count) {
-  // Register a memory region for the dummy receive buffer
   auto pd = qp_->pd_ptr();
-  dummy_recv_mr_ = std::make_shared<rdmapp::local_mr>(
-      pd->reg_mr(dummy_recv_buffer_.data(), dummy_recv_buffer_.size()));
+  oob_buffer_mr_ = std::make_shared<rdmapp::local_mr>(
+      pd->reg_mr(oob_buffer_.data(), oob_buffer_.size()));
 
   // Post initial batch of receives - we post just enough to handle the transfer
   // QP capacity is 1024, but we need total_packets_ + small buffer for the
   // transfer Don't overpost (which could cause duplicate completion loop)
   constexpr size_t max_qp_capacity = 1024;
-  size_t needed_receives = std::min(count + count / 20, count + 100UL);
+  size_t needed_receives = count;
   size_t initial_count = std::min(needed_receives, max_qp_capacity);
 
   Logger::info() << "Receiver: Posting " << initial_count
@@ -187,7 +187,7 @@ rdmapp::task<void> RDMAReceiver::post_receives(size_t count) {
 }
 
 void RDMAReceiver::post_single_receive() {
-  auto mr = dummy_recv_mr_;
+  auto mr = oob_buffer_mr_;
   auto qp = qp_;
 
   if (!mr) {
@@ -245,7 +245,7 @@ void RDMAReceiver::process_completions() {
 
   Logger::info() << "Receiver: Backend thread started";
 
-  if (!dummy_recv_mr_) {
+  if (!oob_buffer_mr_) {
     Logger::error() << "Receiver: FATAL - dummy_recv_mr_ not initialized in "
                        "completion thread!";
     return;
@@ -396,11 +396,12 @@ void RDMAReceiver::process_completions() {
       }
     }
 
-    //Essentially we are only posting 1024 RECVS so this repost loop is very important
-    //Dont know how we can post all recieves all at once. Might be related in to max in flight?
-    if (receives_to_repost > 0 && dummy_recv_mr_) {
+    // Essentially we are only posting 1024 RECVS so this repost loop is very
+    // important Dont know how we can post all recieves all at once. Might be
+    // related in to max in flight?
+    if (receives_to_repost > 0 && oob_buffer_mr_) {
       for (size_t i = 0; i < receives_to_repost; ++i) {
-        post_single_receive(); 
+        post_single_receive();
       }
       if (receives_to_repost > 1) {
         Logger::debug() << "[BACKEND] Reposted " << receives_to_repost
@@ -490,7 +491,7 @@ void RDMAReceiver::frontend_poller() {
               chunk_bitmap_.load(std::memory_order_acquire);
 
           if (current_chunk_bitmap & chunk_bit) {
-            continue; 
+            continue;
           }
 
           // Check if all packets in this chunk are received
