@@ -65,6 +65,12 @@ rdmapp::task<std::vector<uint8_t>> RDMAReceiver::receive_data(size_t expected_si
         pd->reg_mr(recv_buffer_, recv_buffer_size_));
     
     total_packets_ = calculate_num_packets(expected_size, config_.mtu);
+    
+    // Ensure total number of packets doesn't exceed 24-bit limit
+    if (total_packets_ > 0xFFFFFF) {
+        throw std::runtime_error("Total number of packets exceeds maximum value (2^24 - 1)");
+    }
+    
     total_chunks_ = calculate_num_chunks(total_packets_, config_.chunk_size);
     
     // Initialize packet bitmap: each element is atomic<uint16_t> representing 16 packets

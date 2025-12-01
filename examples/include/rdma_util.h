@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <stdexcept>
 #include <infiniband/verbs.h>
 
 namespace RDMA_EC {
@@ -43,17 +44,20 @@ struct CTSInfo {
     uint32_t rkey;
     size_t buffer_size;
     size_t total_packets;
-    uint16_t msg_id;
+    uint8_t msg_id;
 };
 
 // Utility functions for immediate value encoding/decoding
-inline uint32_t encode_immediate(uint16_t msg_id, uint16_t packet_idx) {
-    return (static_cast<uint32_t>(msg_id) << 16) | packet_idx;
+// msg_id: 8 bits (upper 8 bits of uint32_t)
+// packet_idx: 24 bits (lower 24 bits of uint32_t)
+// Maximum packet_idx value: 2^24 - 1 = 16,777,215
+inline uint32_t encode_immediate(uint8_t msg_id, uint32_t packet_idx) {
+    return (static_cast<uint32_t>(msg_id) << 24) | (packet_idx & 0xFFFFFF);
 }
 
-inline std::pair<uint16_t, uint16_t> decode_immediate(uint32_t imm) {
-    uint16_t msg_id = (imm >> 16) & 0xFFFF;
-    uint16_t packet_idx = imm & 0xFFFF;
+inline std::pair<uint8_t, uint32_t> decode_immediate(uint32_t imm) {
+    uint8_t msg_id = (imm >> 24) & 0xFF;
+    uint32_t packet_idx = imm & 0xFFFFFF;
     return {msg_id, packet_idx};
 }
 

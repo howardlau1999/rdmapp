@@ -29,6 +29,12 @@ rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
     
     const uint8_t* data_ptr = static_cast<const uint8_t*>(data);
     size_t num_packets = calculate_num_packets(size, config_.mtu);
+    
+    // Ensure total number of packets doesn't exceed 24-bit limit
+    if (num_packets > 0xFFFFFF) {
+        throw std::runtime_error("Total number of packets exceeds maximum value (2^24 - 1)");
+    }
+    
     size_t num_chunks = calculate_num_chunks(num_packets, config_.chunk_size);
     
     // Note: current_msg_id_ is set from CTS message, not incremented here
@@ -102,7 +108,7 @@ rdmapp::task<void> RDMASender::send_packet(size_t packet_idx,
         static_cast<uint32_t>(packet_size),
         cts_info_.rkey);
     
-    uint32_t imm = encode_immediate(current_msg_id_, packet_idx);
+    uint32_t imm = encode_immediate(current_msg_id_.load(), static_cast<uint32_t>(packet_idx));
     
     Logger::debug() << "Sender: Sending packet " << packet_idx << " offset=" << offset 
                 << " size=" << packet_size << " imm=0x" << std::hex << imm << std::dec;

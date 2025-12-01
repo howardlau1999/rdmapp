@@ -44,7 +44,7 @@ private:
     CTSInfo cts_info_;
    
     // Current message ID
-    std::atomic<uint16_t> current_msg_id_{0};
+    std::atomic<uint8_t> current_msg_id_{0};
     
     // Statistics
     std::atomic<size_t> packets_sent_{0};
