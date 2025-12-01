@@ -49,7 +49,6 @@ rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
                                           num_packets - chunk_idx * config_.chunk_size);
         Logger::info() << "Sender: Sending chunk " << chunk_idx << " with " << packets_in_chunk << " packets";
         co_await send_chunk(chunk_idx, data_ptr, chunk_start_offset, packets_in_chunk);
-        //std::this_thread::sleep_for(std::chrono::milliseconds(5)); //TODO
     }
     
     packets_sent_ += num_packets;

@@ -278,7 +278,7 @@ int main(int argc, char *argv[]) {
     if (!is_client_mode && receiver_future.has_value()) {
       try {
         receiver_future->wait();
-        receiver_future->get(); // This will throw if there was an exception
+        receiver_future->get();
         Logger::info() << "Receiver task completed successfully";
       } catch (const std::exception &e) {
         Logger::error() << "Receiver task failed: " << e.what();
@@ -286,7 +286,7 @@ int main(int argc, char *argv[]) {
     } else if (is_client_mode && sender_future.has_value()) {
       try {
         sender_future->wait();
-        sender_future->get(); // This will throw if there was an exception
+        sender_future->get();
         Logger::info() << "Sender task completed successfully";
       } catch (const std::exception &e) {
         Logger::error() << "Sender task failed: " << e.what();
