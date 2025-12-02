@@ -61,12 +61,20 @@ class qp : public noncopyable, public std::enable_shared_from_this<qp> {
   std::shared_ptr<cq> send_cq_;
   std::shared_ptr<srq> srq_;
   std::vector<uint8_t> user_data_;
+  enum ibv_qp_type qp_type_;
 
   /**
    * @brief Creates a new Queue Pair. The Queue Pair will be in the RESET state.
    *
    */
   void create();
+
+  /**
+   * @brief Creates a new Queue Pair with the specified QP type. The Queue Pair will be in the RESET state.
+   *
+   * @param qp_type The type of Queue Pair to create (e.g., IBV_QPT_RC, IBV_QPT_UC).
+   */
+  void create(enum ibv_qp_type qp_type);
 
   /**
    * @brief Creates a new Queue Pair using mlx5 api.
@@ -205,6 +213,76 @@ public:
    */
   qp(std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
      std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq = nullptr);
+
+  /**
+   * @brief Construct a new qp object with the specified QP type. The constructed Queue Pair will be in
+   * INIT state.
+   *
+   * @param pd The protection domain of the new Queue Pair.
+   * @param cq The completion queue of both send and recv work completions.
+   * @param qp_type The type of Queue Pair to create (e.g., IBV_QPT_RC, IBV_QPT_UC).
+   * @param srq (Optional) If set, all recv work requests will be posted to this
+   * SRQ.
+   */
+  qp(std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
+     enum ibv_qp_type qp_type, std::shared_ptr<srq> srq = nullptr);
+
+  /**
+   * @brief Construct a new qp object with the specified QP type. The constructed Queue Pair will be in
+   * INIT state.
+   *
+   * @param pd The protection domain of the new Queue Pair.
+   * @param recv_cq The completion queue of recv work completions.
+   * @param send_cq The completion queue of send work completions.
+   * @param qp_type The type of Queue Pair to create (e.g., IBV_QPT_RC, IBV_QPT_UC).
+   * @param srq (Optional) If set, all recv work requests will be posted to this
+   * SRQ.
+   */
+  qp(std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
+     std::shared_ptr<cq> send_cq, enum ibv_qp_type qp_type,
+     std::shared_ptr<srq> srq = nullptr);
+
+  /**
+   * @brief Construct a new qp object with the specified QP type. The Queue Pair will be created with the
+   * given remote Queue Pair parameters. Once constructed, the Queue Pair will
+   * be in the RTS state.
+   *
+   * @param remote_lid The LID of the remote Queue Pair.
+   * @param remote_qpn The QPN of the remote Queue Pair.
+   * @param remote_psn The PSN of the remote Queue Pair.
+   * @param remote_gid The GID of the remote Queue Pair.
+   * @param pd The protection domain of the new Queue Pair.
+   * @param cq The completion queue of both send and recv work completions.
+   * @param qp_type The type of Queue Pair to create (e.g., IBV_QPT_RC, IBV_QPT_UC).
+   * @param srq (Optional) If set, all recv work requests will be posted to this
+   * SRQ.
+   */
+  qp(const uint16_t remote_lid, const uint32_t remote_qpn,
+     const uint32_t remote_psn, const union ibv_gid remote_gid,
+     std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
+     enum ibv_qp_type qp_type, std::shared_ptr<srq> srq = nullptr);
+
+  /**
+   * @brief Construct a new qp object with the specified QP type. The Queue Pair will be created with the
+   * given remote Queue Pair parameters. Once constructed, the Queue Pair will
+   * be in the RTS state.
+   *
+   * @param remote_lid The LID of the remote Queue Pair.
+   * @param remote_qpn The QPN of the remote Queue Pair.
+   * @param remote_psn The PSN of the remote Queue Pair.
+   * @param remote_gid The GID of the remote Queue Pair.
+   * @param pd The protection domain of the new Queue Pair.
+   * @param recv_cq The completion queue of recv work completions.
+   * @param send_cq The completion queue of send work completions.
+   * @param qp_type The type of Queue Pair to create (e.g., IBV_QPT_RC, IBV_QPT_UC).
+   * @param srq (Optional) If set, all recv work requests will be posted to this
+   * SRQ.
+   */
+  qp(const uint16_t remote_lid, const uint32_t remote_qpn,
+     const uint32_t remote_psn, const union ibv_gid remote_gid,
+     std::shared_ptr<pd> pd, std::shared_ptr<cq> recv_cq,
+     std::shared_ptr<cq> send_cq, enum ibv_qp_type qp_type,
+     std::shared_ptr<srq> srq = nullptr);
 
   /**
    * @brief This function is used to post a send work request to the Queue Pair.

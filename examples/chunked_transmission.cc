@@ -11,9 +11,21 @@
 #include <vector>
 
 #include <rdmapp/rdmapp.h>
+#include <infiniband/verbs.h>
 
 constexpr size_t DEFAULT_BUFFER_SIZE = 8192;
 constexpr size_t DEFAULT_CHUNK_SIZE = 8192;
+
+static enum ibv_qp_type parse_qp_type(const std::string &qp_type_str) {
+  if (qp_type_str == "RC" || qp_type_str == "rc") {
+    return IBV_QPT_RC;
+  } else if (qp_type_str == "UC" || qp_type_str == "uc") {
+    return IBV_QPT_UC;
+  } else {
+    std::cerr << "Invalid QP type: " << qp_type_str << ". Must be RC or UC." << std::endl;
+    exit(1);
+  }
+}
 
 rdmapp::task<void> handle_qp(std::shared_ptr<rdmapp::qp> qp,
                              size_t buffer_size,
@@ -135,6 +147,7 @@ int main(int argc, char *argv[]) {
 
   size_t buffer_size = DEFAULT_BUFFER_SIZE;
   size_t chunk_size = DEFAULT_CHUNK_SIZE;
+  enum ibv_qp_type qp_type = IBV_QPT_RC;
 
   auto device = std::make_shared<rdmapp::device>(0, 1, 3);
   auto pd = std::make_shared<rdmapp::pd>(device);
@@ -145,49 +158,96 @@ int main(int argc, char *argv[]) {
 
   if (argc == 2) {
     // Server: [port]
-    rdmapp::acceptor acceptor(loop, std::stoi(argv[1]), pd, cq);
+    rdmapp::acceptor acceptor(loop, std::stoi(argv[1]), pd, cq, nullptr, qp_type);
     server(acceptor, buffer_size, chunk_size);
   } else if (argc == 3) {
     if (std::string(argv[1]).find('.') != std::string::npos ||
         std::string(argv[1]).find(':') != std::string::npos) {
       // Client: [server_ip] [port]
-      rdmapp::connector connector(loop, argv[1], std::stoi(argv[2]), pd, cq);
+      rdmapp::connector connector(loop, argv[1], std::stoi(argv[2]), pd, cq, nullptr, qp_type);
       client(connector, buffer_size, chunk_size);
     } else {
-      // Server: [port] [buffer_size]
-      buffer_size = std::stoull(argv[2]);
-      rdmapp::acceptor acceptor(loop, std::stoi(argv[1]), pd, cq);
-      server(acceptor, buffer_size, chunk_size);
+      // Server: [port] [buffer_size] OR [port] [qp_type]
+      // Check if second arg is a number or QP type string
+      if (std::string(argv[2]) == "RC" || std::string(argv[2]) == "rc" ||
+          std::string(argv[2]) == "UC" || std::string(argv[2]) == "uc") {
+        qp_type = parse_qp_type(argv[2]);
+        rdmapp::acceptor acceptor(loop, std::stoi(argv[1]), pd, cq, nullptr, qp_type);
+        server(acceptor, buffer_size, chunk_size);
+      } else {
+        buffer_size = std::stoull(argv[2]);
+        rdmapp::acceptor acceptor(loop, std::stoi(argv[1]), pd, cq, nullptr, qp_type);
+        server(acceptor, buffer_size, chunk_size);
+      }
     }
   } else if (argc == 4) {
     if (std::string(argv[1]).find('.') != std::string::npos ||
         std::string(argv[1]).find(':') != std::string::npos) {
-      // Client: [server_ip] [port] [buffer_size]
-      buffer_size = std::stoull(argv[3]);
-      rdmapp::connector connector(loop, argv[1], std::stoi(argv[2]), pd, cq);
-      client(connector, buffer_size, chunk_size);
+      // Client: [server_ip] [port] [buffer_size] OR [server_ip] [port] [qp_type]
+      if (std::string(argv[3]) == "RC" || std::string(argv[3]) == "rc" ||
+          std::string(argv[3]) == "UC" || std::string(argv[3]) == "uc") {
+        qp_type = parse_qp_type(argv[3]);
+        rdmapp::connector connector(loop, argv[1], std::stoi(argv[2]), pd, cq, nullptr, qp_type);
+        client(connector, buffer_size, chunk_size);
+      } else {
+        buffer_size = std::stoull(argv[3]);
+        rdmapp::connector connector(loop, argv[1], std::stoi(argv[2]), pd, cq, nullptr, qp_type);
+        client(connector, buffer_size, chunk_size);
+      }
     } else {
-      // Server: [port] [buffer_size] [chunk_size]
+      // Server: [port] [buffer_size] [chunk_size] OR [port] [buffer_size] [qp_type]
       buffer_size = std::stoull(argv[2]);
-      chunk_size = std::stoull(argv[3]);
-      rdmapp::acceptor acceptor(loop, std::stoi(argv[1]), pd, cq);
-      server(acceptor, buffer_size, chunk_size);
+      if (std::string(argv[3]) == "RC" || std::string(argv[3]) == "rc" ||
+          std::string(argv[3]) == "UC" || std::string(argv[3]) == "uc") {
+        qp_type = parse_qp_type(argv[3]);
+        rdmapp::acceptor acceptor(loop, std::stoi(argv[1]), pd, cq, nullptr, qp_type);
+        server(acceptor, buffer_size, chunk_size);
+      } else {
+        chunk_size = std::stoull(argv[3]);
+        rdmapp::acceptor acceptor(loop, std::stoi(argv[1]), pd, cq, nullptr, qp_type);
+        server(acceptor, buffer_size, chunk_size);
+      }
     }
   } else if (argc == 5) {
-    // Client: [server_ip] [port] [buffer_size] [chunk_size]
+    if (std::string(argv[1]).find('.') != std::string::npos ||
+        std::string(argv[1]).find(':') != std::string::npos) {
+      // Client: [server_ip] [port] [buffer_size] [chunk_size] OR [server_ip] [port] [buffer_size] [qp_type]
+      buffer_size = std::stoull(argv[3]);
+      if (std::string(argv[4]) == "RC" || std::string(argv[4]) == "rc" ||
+          std::string(argv[4]) == "UC" || std::string(argv[4]) == "uc") {
+        qp_type = parse_qp_type(argv[4]);
+        rdmapp::connector connector(loop, argv[1], std::stoi(argv[2]), pd, cq, nullptr, qp_type);
+        client(connector, buffer_size, chunk_size);
+      } else {
+        chunk_size = std::stoull(argv[4]);
+        rdmapp::connector connector(loop, argv[1], std::stoi(argv[2]), pd, cq, nullptr, qp_type);
+        client(connector, buffer_size, chunk_size);
+      }
+    } else {
+      // Server: [port] [buffer_size] [chunk_size] [qp_type]
+      buffer_size = std::stoull(argv[2]);
+      chunk_size = std::stoull(argv[3]);
+      qp_type = parse_qp_type(argv[4]);
+      rdmapp::acceptor acceptor(loop, std::stoi(argv[1]), pd, cq, nullptr, qp_type);
+      server(acceptor, buffer_size, chunk_size);
+    }
+  } else if (argc == 6) {
+    // Client: [server_ip] [port] [buffer_size] [chunk_size] [qp_type]
     buffer_size = std::stoull(argv[3]);
     chunk_size = std::stoull(argv[4]);
-    rdmapp::connector connector(loop, argv[1], std::stoi(argv[2]), pd, cq);
+    qp_type = parse_qp_type(argv[5]);
+    rdmapp::connector connector(loop, argv[1], std::stoi(argv[2]), pd, cq, nullptr, qp_type);
     client(connector, buffer_size, chunk_size);
   } else {
-    std::cout << "Usage: " << argv[0] << " [port] [buffer_size] [chunk_size] for server"
+    std::cout << "Usage: " << argv[0] << " [port] [buffer_size] [chunk_size] [qp_type] for server"
               << std::endl;
     std::cout << "       " << argv[0]
-              << " [server_ip] [port] [buffer_size] [chunk_size] for client" << std::endl;
+              << " [server_ip] [port] [buffer_size] [chunk_size] [qp_type] for client" << std::endl;
     std::cout << "       buffer_size defaults to " << DEFAULT_BUFFER_SIZE
               << " bytes" << std::endl;
     std::cout << "       chunk_size defaults to " << DEFAULT_CHUNK_SIZE
               << " bytes" << std::endl;
+    std::cout << "       qp_type must be RC or UC (defaults to UC)" << std::endl;
   }
 
   loop->close();

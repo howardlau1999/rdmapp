@@ -1,7 +1,7 @@
 #pragma once
 
 #include "rdma_util.h"
-#include "acceptor.h"
+#include "connector.h"
 #include <rdmapp/rdmapp.h>
 #include <memory>
 #include <vector>
@@ -10,7 +10,7 @@ namespace RDMA_EC {
 
 class RDMASender {
 public:
-    RDMASender(std::shared_ptr<rdmapp::acceptor> acceptor, 
+    RDMASender(std::shared_ptr<rdmapp::connector> connector, 
                const Config& config = Config{});
     
     // Send data to connected receiver
@@ -36,7 +36,7 @@ private:
                                     size_t offset,
                                     size_t packet_size);
     
-    std::shared_ptr<rdmapp::acceptor> acceptor_;
+    std::shared_ptr<rdmapp::connector> connector_;
     std::shared_ptr<rdmapp::qp> qp_;
     Config config_;
     
@@ -44,7 +44,7 @@ private:
     CTSInfo cts_info_;
    
     // Current message ID
-    std::atomic<uint16_t> current_msg_id_{0};
+    std::atomic<uint8_t> current_msg_id_{0};
     
     // Statistics
     std::atomic<size_t> packets_sent_{0};
