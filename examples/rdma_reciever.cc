@@ -118,12 +118,8 @@ rdmapp::task<void> RDMAReceiver::receive_data(size_t expected_size) {
                  << ", total_packets_=" << total_packets_
                  << ", total_chunks_=" << total_chunks_;
 
-  // Start ACK sender coroutine so it can emit ACKs as chunks become complete
-  // based on the chunk_bitmap_ (updated by frontend_poller).
-  if (config_.enable_selective_repeat && ctrl_qp_) {
-    auto ack_task = send_acks();
-    ack_task.detach();
-  }
+  // Note: ACKs will be sent by the frontend poller via small detached
+  // coroutines when chunks are detected as complete.
 
   Logger::info() << "Receiver: Starting backend thread...";
   completion_thread_ = std::thread(&RDMAReceiver::process_completions, this);
@@ -177,53 +173,6 @@ rdmapp::task<void> RDMAReceiver::send_cts(size_t buffer_size) {
   Logger::info() << "Receiver: Sent CTS - addr=0x" << std::hex
                  << cts.remote_addr << ", rkey=0x" << cts.rkey << std::dec;
 
-  co_return;
-}
-
-rdmapp::task<void> RDMAReceiver::send_acks() {
-  if (!config_.enable_selective_repeat || !ctrl_qp_) {
-    co_return;
-  }
-
-  Logger::info() << "Receiver: ACK sender started";
-
-  size_t acked_chunks = 0;
-
-  while (!stop_thread_.load(std::memory_order_acquire) &&
-         acked_chunks < total_chunks_) {
-    for (size_t chunk_idx = 0; chunk_idx < total_chunks_; ++chunk_idx) {
-      if (chunk_acked_[chunk_idx]) {
-        continue;
-      }
-
-      uint64_t chunk_bit = 1ULL << chunk_idx;
-      uint64_t current_chunk_bitmap =
-          chunk_bitmap_.load(std::memory_order_acquire);
-
-      if (current_chunk_bitmap & chunk_bit) {
-        ChunkAck ack;
-        ack.msg_id = current_msg_id_ - 1;
-        ack.chunk_idx = static_cast<uint32_t>(chunk_idx);
-
-        co_await ctrl_qp_->send(&ack, sizeof(ack));
-
-        chunk_acked_[chunk_idx] = true;
-        ++acked_chunks;
-
-        Logger::debug() << "Receiver: Sent ACK for chunk " << chunk_idx;
-      }
-    }
-
-    if (acked_chunks >= total_chunks_) {
-      break;
-    }
-
-    // Sleep briefly to avoid busy-waiting; ACK granularity is per chunk.
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-  }
-
-  Logger::info() << "Receiver: ACK sender exiting after ACKing " << acked_chunks
-                 << " chunks";
   co_return;
 }
 
@@ -586,6 +535,24 @@ void RDMAReceiver::frontend_poller() {
 
           if (chunk_complete) {
             chunk_bitmap_.fetch_or(chunk_bit, std::memory_order_release);
+
+            // If selective repeat is enabled, send an ACK for this chunk once.
+            if (config_.enable_selective_repeat && ctrl_qp_) {
+              if (!chunk_acked_.empty() && chunk_idx < chunk_acked_.size() &&
+                  !chunk_acked_[chunk_idx]) {
+                chunk_acked_[chunk_idx] = true;
+
+                auto ack_task =
+                    [this, chunk_idx]() -> rdmapp::task<void> {
+                  ChunkAck ack;
+                  ack.msg_id = current_msg_id_ - 1;
+                  ack.chunk_idx = static_cast<uint32_t>(chunk_idx);
+                  co_await ctrl_qp_->send(&ack, sizeof(ack));
+                  co_return;
+                }();
+                ack_task.detach();
+              }
+            }
           }
         }
       }

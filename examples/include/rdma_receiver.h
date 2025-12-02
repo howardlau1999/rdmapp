@@ -48,9 +48,6 @@ private:
   // Check if reception is complete
   bool is_complete() const;
 
-  // Send ACKs for completed chunks over the control QP (selective repeat).
-  rdmapp::task<void> send_acks();
-
   std::shared_ptr<rdmapp::acceptor> acceptor_;
   std::shared_ptr<rdmapp::qp> qp_;
   std::shared_ptr<rdmapp::qp> ctrl_qp_;  // optional control QP for ACKs
