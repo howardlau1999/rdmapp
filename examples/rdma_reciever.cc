@@ -169,7 +169,7 @@ rdmapp::task<void> RDMAReceiver::post_receives(size_t count) {
   // Post initial batch of receives - we post just enough to handle the transfer
   // QP capacity is 1024, but we need total_packets_ + small buffer for the
   // transfer Don't overpost (which could cause duplicate completion loop)
-  constexpr size_t max_qp_capacity = 1024;
+  constexpr size_t max_qp_capacity = 2048;
   size_t needed_receives = count;
   size_t initial_count = std::min(needed_receives, max_qp_capacity);
 
