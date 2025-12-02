@@ -326,7 +326,6 @@ void RDMAReceiver::process_completions() {
       if (wc.status != IBV_WC_SUCCESS) {
         Logger::error() << "Receiver: Completion error: status=" << wc.status
                         << ", opcode=" << wc.opcode;
-        // receives_to_repost++; // Need to repost for error completions too
         continue;
       }
 

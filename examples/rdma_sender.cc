@@ -2,6 +2,7 @@
 #include "rdma_logger.h"
 #include <iostream>
 #include <cstring>
+#include <chrono>
 
 namespace RDMA_EC {
 
@@ -43,12 +44,27 @@ rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
               << num_packets << " packets across " 
               << num_chunks << " chunks";
     
+    // Measure pure data-path throughput on the sender:
+    // from first RDMA write until the last write completion.
+    auto data_start = std::chrono::high_resolution_clock::now();
+
     for (size_t chunk_idx = 0; chunk_idx < num_chunks; ++chunk_idx) {
         size_t chunk_start_offset = chunk_idx * config_.chunk_size * config_.mtu;
         size_t packets_in_chunk = std::min(config_.chunk_size,
                                           num_packets - chunk_idx * config_.chunk_size);
         Logger::info() << "Sender: Sending chunk " << chunk_idx << " with " << packets_in_chunk << " packets";
         co_await send_chunk(chunk_idx, data_ptr, chunk_start_offset, packets_in_chunk);
+    }
+
+    auto data_end = std::chrono::high_resolution_clock::now();
+    double seconds = std::chrono::duration<double>(data_end - data_start).count();
+    if (seconds > 0.0) {
+        double bytes = static_cast<double>(size);
+        double mb_per_sec = bytes / (seconds * 1024.0 * 1024.0);
+        double mbit_per_sec = (bytes * 8.0) / (seconds * 1e6);
+        std::cout << "Sender (data-path): " << mb_per_sec << " MB/s ("
+                       << mbit_per_sec << " Mbit/sec) over " << seconds
+                       << " seconds";
     }
     
     packets_sent_ += num_packets;
