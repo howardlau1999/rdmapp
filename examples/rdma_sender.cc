@@ -3,6 +3,7 @@
 #include <iostream>
 #include <cstring>
 #include <chrono>
+#include <random>
 
 namespace RDMA_EC {
 
@@ -17,7 +18,14 @@ RDMASender::RDMASender(std::shared_ptr<rdmapp::connector> connector,
 rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
     Logger::info() << "Sender: Connecting...";
     qp_ = co_await connector_->connect();
-    Logger::info() << "Sender: Connected";
+    Logger::info() << "Sender: Connected (data QP)";
+
+    // If selective repeat is enabled, create a separate control QP for ACKs.
+    if (config_.enable_selective_repeat) {
+        Logger::info() << "Sender: Connecting control QP for selective repeat...";
+        ctrl_qp_ = co_await connector_->connect();
+        Logger::info() << "Sender: Control QP connected";
+    }
     
     co_await wait_for_cts();
     Logger::info() << "Sender: Received CTS - remote_addr=0x" << std::hex 
@@ -38,6 +46,22 @@ rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
     
     size_t num_chunks = calculate_num_chunks(num_packets, config_.chunk_size);
     
+    // Initialize selective repeat state if enabled
+    if (config_.enable_selective_repeat) {
+        {
+            std::lock_guard<std::mutex> lock(sr_mutex_);
+            sr_chunks_.clear();
+            sr_chunks_.resize(num_chunks);
+        }
+
+        // Start ACK receiver in the background BEFORE sending chunks so that
+        // ACKs are processed concurrently with transmission.
+        if (ctrl_qp_) {
+            auto ack_task = receive_acks(num_chunks);
+            ack_task.detach();
+        }
+    }
+    
     // Note: current_msg_id_ is set from CTS message, not incremented here
     
     Logger::info() << "Sender: Sending " << size << " bytes in " 
@@ -53,6 +77,17 @@ rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
         size_t packets_in_chunk = std::min(config_.chunk_size,
                                           num_packets - chunk_idx * config_.chunk_size);
         Logger::info() << "Sender: Sending chunk " << chunk_idx << " with " << packets_in_chunk << " packets";
+
+        // Record this chunk in the retransmission queue if selective repeat is enabled.
+        if (config_.enable_selective_repeat) {
+            auto now = std::chrono::high_resolution_clock::now();
+            std::lock_guard<std::mutex> lock(sr_mutex_);
+            if (chunk_idx < sr_chunks_.size()) {
+                sr_chunks_[chunk_idx].first_sent = now;
+                sr_chunks_[chunk_idx].acked = false;
+            }
+        }
+
         co_await send_chunk(chunk_idx, data_ptr, chunk_start_offset, packets_in_chunk);
     }
 
@@ -66,7 +101,7 @@ rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
                        << mbit_per_sec << " Mbit/sec) over " << seconds
                        << " seconds";
     }
-    
+
     packets_sent_ += num_packets;
     bytes_sent_ += size;
     
@@ -87,6 +122,34 @@ rdmapp::task<void> RDMASender::wait_for_cts() {
     co_return;
 }
 
+rdmapp::task<void> RDMASender::receive_acks(size_t num_chunks) {
+    size_t acked_chunks = 0;
+
+    while (acked_chunks < num_chunks) {
+        ChunkAck ack{};
+        auto [bytes, imm_opt] = co_await ctrl_qp_->recv(&ack, sizeof(ack));
+
+        if (bytes != sizeof(ack)) {
+            Logger::error() << "Sender: Invalid ACK size: " << bytes;
+            continue;
+        }
+
+        std::lock_guard<std::mutex> lock(sr_mutex_);
+        if (ack.chunk_idx < sr_chunks_.size()) {
+            if (!sr_chunks_[ack.chunk_idx].acked) {
+                sr_chunks_[ack.chunk_idx].acked = true;
+                ++acked_chunks;
+                Logger::debug() << "Sender: ACK received for chunk " << ack.chunk_idx;
+            }
+        } else {
+            Logger::error() << "Sender: ACK for out-of-range chunk " << ack.chunk_idx;
+        }
+    }
+
+    Logger::info() << "Sender: All " << num_chunks << " chunks ACKed";
+    co_return;
+}
+
 rdmapp::task<void> RDMASender::send_chunk(size_t chunk_idx,
                                           const uint8_t* data,
                                           size_t /* chunk_start_offset */,
@@ -96,7 +159,22 @@ rdmapp::task<void> RDMASender::send_chunk(size_t chunk_idx,
         size_t offset = global_packet_idx * config_.mtu;
         size_t packet_size = std::min(config_.mtu, 
                                      cts_info_.buffer_size - offset);
-        
+
+        // For testing selective repeat, we can intentionally drop individual
+        // packets with a small probability. This is only enabled when
+        // selective repeat is on.
+        if (config_.enable_selective_repeat) {
+            static thread_local std::mt19937 rng(std::random_device{}());
+            // 1% chance to drop a packet
+            std::uniform_real_distribution<double> dist(0.0, 1.0);
+            if (dist(rng) < 0.01) {
+                Logger::info() << "Sender: Intentionally dropping packet "
+                               << global_packet_idx << " (chunk " << chunk_idx
+                               << ") for selective-repeat testing";
+                continue;
+            }
+        }
+
         co_await send_packet(global_packet_idx, data, offset, packet_size);
     }
     

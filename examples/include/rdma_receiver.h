@@ -2,6 +2,7 @@
 
 #include "acceptor.h"
 #include "rdma_util.h"
+#include "rdma_sr.h"
 #include <atomic>
 #include <condition_variable>
 #include <memory>
@@ -47,8 +48,12 @@ private:
   // Check if reception is complete
   bool is_complete() const;
 
+  // Send ACKs for completed chunks over the control QP (selective repeat).
+  rdmapp::task<void> send_acks();
+
   std::shared_ptr<rdmapp::acceptor> acceptor_;
   std::shared_ptr<rdmapp::qp> qp_;
+  std::shared_ptr<rdmapp::qp> ctrl_qp_;  // optional control QP for ACKs
   std::shared_ptr<rdmapp::cq> recv_cq_;
   Config config_;
 
@@ -66,6 +71,9 @@ private:
   size_t total_packets_{0};
   size_t total_chunks_{0};
   size_t expected_size_{0};
+
+  // Track which chunks we've already ACKed (to avoid duplicates)
+  std::vector<bool> chunk_acked_;
 
   // Background threads for processing
   std::thread completion_thread_;

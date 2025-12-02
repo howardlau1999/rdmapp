@@ -2,9 +2,14 @@
 
 #include "rdma_util.h"
 #include "connector.h"
+#include "rdma_sr.h"
 #include <rdmapp/rdmapp.h>
 #include <memory>
 #include <vector>
+#include <mutex>
+#include <thread>
+#include <unordered_map>
+#include <chrono>
 
 namespace RDMA_EC {
 
@@ -35,6 +40,9 @@ private:
                                     const uint8_t* data,
                                     size_t offset,
                                     size_t packet_size);
+
+    // Receive ACKs on the control QP (selective repeat).
+    rdmapp::task<void> receive_acks(size_t num_chunks);
     
     std::shared_ptr<rdmapp::connector> connector_;
     std::shared_ptr<rdmapp::qp> qp_;
@@ -52,6 +60,19 @@ private:
     
     // Local memory region
     std::shared_ptr<rdmapp::local_mr> local_mr_;
+
+    // --- Selective repeat (optional) ---
+    // Control QP used for ACKs (created only if enable_selective_repeat is true).
+    std::shared_ptr<rdmapp::qp> ctrl_qp_;
+
+    // Retransmission state per chunk: first send time and ack flag.
+    struct ChunkState {
+        std::chrono::high_resolution_clock::time_point first_sent;
+        bool acked = false;
+    };
+
+    std::vector<ChunkState> sr_chunks_;
+    std::mutex sr_mutex_;
 };
 
 } // namespace RDMA_EC

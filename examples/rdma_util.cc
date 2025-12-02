@@ -81,6 +81,16 @@ bool Config::parse_line(const std::string &line) {
       } else if (value == "false" || value == "0" || value == "no") {
         enable_logging = false;
       }
+    } else if (key == "enable_selective_repeat") {
+      std::transform(value.begin(), value.end(), value.begin(),
+                     [](unsigned char c) { return std::tolower(c); });
+      if (value == "true" || value == "1" || value == "yes") {
+        enable_selective_repeat = true;
+      } else if (value == "false" || value == "0" || value == "no") {
+        enable_selective_repeat = false;
+      }
+    } else if (key == "sr_rto_ms") {
+      sr_rto_ms = std::stoi(value);
     } else {
       std::cerr << "[Config] Unknown Config key: " << key << std::endl;
       return true;
@@ -143,6 +153,8 @@ bool Config::save_to_file(const std::string &filepath) const {
   file << "cpu_core_id=" << cpu_core_id << "\n";
   file << "receiver_timeout_seconds=" << receiver_timeout_seconds << "\n";
   file << "enable_logging=" << (enable_logging ? "true" : "false") << "\n";
+  file << "enable_selective_repeat=" << (enable_selective_repeat ? "true" : "false") << "\n";
+  file << "sr_rto_ms=" << sr_rto_ms << "\n";
 
   file.close();
 
@@ -160,6 +172,8 @@ void Config::print() const {
   std::cout << "  receiver_timeout_seconds = " << receiver_timeout_seconds
             << std::endl;
   std::cout << "  enable_logging = " << (enable_logging ? "true" : "false") << std::endl;
+  std::cout << "  enable_selective_repeat = " << (enable_selective_repeat ? "true" : "false") << std::endl;
+  std::cout << "  sr_rto_ms = " << sr_rto_ms << std::endl;
 }
 
 } // namespace RDMA_EC

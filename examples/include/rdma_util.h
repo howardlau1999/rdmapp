@@ -25,6 +25,9 @@ public:
     int receiver_timeout_seconds = DEFAULT_RECEIVER_TIMEOUT_SECONDS;
     enum ibv_qp_type transport_type = DEFAULT_RDMA_TRANSPORT;
     bool enable_logging = DEFAULT_ENABLE_LOGGING;
+    // Optional selective repeat reliability
+    bool enable_selective_repeat = false;
+    int sr_rto_ms = 10;  // retransmission timeout in milliseconds
 
 
     bool load_from_file(const std::string& filepath);
