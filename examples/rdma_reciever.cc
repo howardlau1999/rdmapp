@@ -520,9 +520,11 @@ void RDMAReceiver::frontend_poller() {
       uint64_t chunk_bit = 1ULL << chunk_idx;
       if ((current_chunk_bitmap & chunk_bit) && !chunk_acked_[chunk_idx]) {
         // Chunk is complete but not yet ACKed. Send (or re-send) ACK from the
-        // frontend thread using the same coroutine-based send logic.
+        // frontend thread using a synchronous coroutine-based send. We do NOT
+        // detach here to avoid using 'this' after RDMAReceiver is destroyed.
         if (config_.enable_selective_repeat && ctrl_qp_) {
-          auto ack_task = [this, chunk_idx]() -> rdmapp::task<void> {
+          rdmapp::task<void> ack_task =
+              [this, chunk_idx]() -> rdmapp::task<void> {
             ChunkAck ack;
             ack.msg_id = current_msg_id_ - 1;
             ack.chunk_idx = static_cast<uint32_t>(chunk_idx);
@@ -534,9 +536,15 @@ void RDMAReceiver::frontend_poller() {
             chunks_acked_.fetch_add(1, std::memory_order_release);
             co_return;
           }();
-          // We can detach here; completion is tracked via chunk_acked_ and
-          // chunks_acked_ which are only used for completion and retries.
-          ack_task.detach();
+
+          try {
+            auto &fut = ack_task.get_future();
+            fut.get(); // block frontend thread until ACK send completes
+          } catch (const std::exception &e) {
+            Logger::error()
+                << "Receiver: Error in frontend ACK send for chunk "
+                << chunk_idx << ": " << e.what();
+          }
         }
       }
     }
