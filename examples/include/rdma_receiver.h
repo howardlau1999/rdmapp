@@ -71,7 +71,8 @@ private:
   // Packet tracking bitmaps
   std::vector<std::atomic<uint16_t>>
       packet_bitmap_; // templating stuff here maybe
-  std::atomic<uint64_t> chunk_bitmap_{0};
+  // Chunk completion bitmap: one bit per chunk, packed into uint8_t (8 chunks per byte)
+  std::vector<std::atomic<uint8_t>> chunk_bitmap_;
   size_t total_packets_{0};
   size_t total_chunks_{0};
   size_t expected_size_{0};

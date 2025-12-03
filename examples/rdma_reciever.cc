@@ -96,7 +96,9 @@ rdmapp::task<void> RDMAReceiver::receive_data(size_t expected_size) {
   size_t bitmap_size = (total_packets_ + 15) / 16; // Round up to nearest 16
   packet_bitmap_ = std::vector<std::atomic<uint16_t>>(bitmap_size);
 
-  chunk_bitmap_.store(0, std::memory_order_relaxed);
+  // Initialize chunk bitmap: one bit per chunk, packed into uint8_t (8 chunks per byte)
+  size_t chunk_bitmap_size = (total_chunks_ + 7) / 8; // Round up to nearest 8
+  chunk_bitmap_ = std::vector<std::atomic<uint8_t>>(chunk_bitmap_size);
 
   // Initialize selective repeat ACK tracking if enabled
   if (config_.enable_selective_repeat) {
@@ -407,13 +409,18 @@ void RDMAReceiver::process_completions() {
           if (config_.chunk_size == 16) {
             size_t chunk_idx = bitmap_idx; // same mapping under this assumption
             if (chunk_idx < total_chunks_ && new_val == 0xFFFF) {
-              uint64_t chunk_bit = 1ULL << chunk_idx;
-              uint64_t current_chunk_bitmap =
-                  chunk_bitmap_.load(std::memory_order_acquire);
-              if ((current_chunk_bitmap & chunk_bit) == 0) {
-                chunk_bitmap_.fetch_or(chunk_bit, std::memory_order_release);
-                Logger::debug() << "[BACKEND] Marked chunk " << chunk_idx
-                                << " complete in chunk_bitmap_";
+              // Mark this chunk as complete in the bitmap (one bit per chunk).
+              size_t bitmap_idx_chunk = chunk_idx / 8;
+              size_t bit_pos = chunk_idx % 8;
+              uint8_t chunk_bit = 1U << bit_pos;
+              
+              if (bitmap_idx_chunk < chunk_bitmap_.size()) {
+                uint8_t old_val = chunk_bitmap_[bitmap_idx_chunk].fetch_or(
+                    chunk_bit, std::memory_order_release);
+                if ((old_val & chunk_bit) == 0) {
+                  Logger::debug() << "[BACKEND] Marked chunk " << chunk_idx
+                                  << " complete in chunk_bitmap_";
+                }
               }
             }
           }
@@ -510,15 +517,19 @@ void RDMAReceiver::frontend_poller() {
     // Backend marks chunk completion in chunk_bitmap_.
     // Frontend scans for newly completed chunks and sends ACKs (possibly
     // re-sending if an ACK was lost on UC).
-    uint64_t current_chunk_bitmap =
-        chunk_bitmap_.load(std::memory_order_acquire);
-
     for (size_t chunk_idx = 0; chunk_idx < total_chunks_; ++chunk_idx) {
       if (chunk_idx >= chunk_acked_.size())
         break;
 
-      uint64_t chunk_bit = 1ULL << chunk_idx;
-      if ((current_chunk_bitmap & chunk_bit) && !chunk_acked_[chunk_idx]) {
+      // Check if chunk is complete (bit is set in chunk_bitmap_) and not yet ACKed.
+      size_t bitmap_idx_chunk = chunk_idx / 8;
+      size_t bit_pos = chunk_idx % 8;
+      uint8_t chunk_bit = 1U << bit_pos;
+      
+      if (bitmap_idx_chunk < chunk_bitmap_.size() &&
+          (chunk_bitmap_[bitmap_idx_chunk].load(std::memory_order_acquire) &
+           chunk_bit) &&
+          !chunk_acked_[chunk_idx]) {
         // Chunk is complete but not yet ACKed. Send (or re-send) ACK from the
         // frontend thread using a synchronous coroutine-based send. We do NOT
         // detach here to avoid using 'this' after RDMAReceiver is destroyed.
@@ -559,10 +570,22 @@ void RDMAReceiver::frontend_poller() {
 }
 
 bool RDMAReceiver::is_complete() const {
-  uint64_t expected_mask =
-      (total_chunks_ == 64) ? UINT64_MAX : ((1ULL << total_chunks_) - 1);
-  uint64_t current_mask = chunk_bitmap_.load(std::memory_order_acquire);
-  return (current_mask & expected_mask) == expected_mask;
+  // Check if all chunks are marked as complete in the bitmap (one bit per chunk).
+  for (size_t chunk_idx = 0; chunk_idx < total_chunks_; ++chunk_idx) {
+    size_t bitmap_idx_chunk = chunk_idx / 8;
+    size_t bit_pos = chunk_idx % 8;
+    uint8_t chunk_bit = 1U << bit_pos;
+    
+    if (bitmap_idx_chunk >= chunk_bitmap_.size()) {
+      return false;
+    }
+    
+    if ((chunk_bitmap_[bitmap_idx_chunk].load(std::memory_order_acquire) &
+         chunk_bit) == 0) {
+      return false;
+    }
+  }
+  return total_chunks_ > 0;
 }
 
 } // namespace RDMA_EC
