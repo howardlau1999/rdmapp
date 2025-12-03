@@ -424,12 +424,9 @@ void RDMAReceiver::process_completions() {
                   !chunk_acked_[chunk_idx]) {
                 chunk_acked_[chunk_idx] = true;
 
-                // Treat the send as a blocking call in this backend thread by
-                // creating a coroutine task, obtaining its future, and waiting
-                // on it. This ensures the ACK is actually put on the wire
-                // before we continue.
-                rdmapp::task<void> ack_task =
-                    [this, chunk_idx]() -> rdmapp::task<void> {
+                // Fire-and-forget coroutine for ACK send; control QP is RC so
+                // ACK delivery is reliable.
+                auto ack_task = [this, chunk_idx]() -> rdmapp::task<void> {
                   ChunkAck ack;
                   ack.msg_id = current_msg_id_ - 1;
                   ack.chunk_idx = static_cast<uint32_t>(chunk_idx);
@@ -439,15 +436,7 @@ void RDMAReceiver::process_completions() {
                       << " (msg_id=" << static_cast<int>(ack.msg_id) << ")";
                   co_return;
                 }();
-
-                try {
-                  auto &fut = ack_task.get_future();
-                  fut.get(); // block current thread until ACK send completes
-                } catch (const std::exception &e) {
-                  Logger::error()
-                      << "Receiver: Error waiting for ACK send completion for "
-                      << "chunk " << chunk_idx << ": " << e.what();
-                }
+                ack_task.detach();
               }
             }
           }
@@ -546,21 +535,10 @@ void RDMAReceiver::frontend_poller() {
       uint64_t chunk_bit = 1ULL << chunk_idx;
       if ((current_chunk_bitmap & chunk_bit) && !chunk_acked_[chunk_idx]) {
         // We just observed this chunk as complete and not yet ACKed.
+        // ACKs are now sent from the backend completion thread to avoid races
+        // and ensure timely delivery; the frontend only tracks which chunks
+        // have been seen as complete.
         chunk_acked_[chunk_idx] = true;
-
-        if (config_.enable_selective_repeat && ctrl_qp_) {
-          auto ack_task = [this, chunk_idx]() -> rdmapp::task<void> {
-            ChunkAck ack;
-            ack.msg_id = current_msg_id_ - 1;
-            ack.chunk_idx = static_cast<uint32_t>(chunk_idx);
-            co_await ctrl_qp_->send(&ack, sizeof(ack));
-            Logger::info()
-                << "Receiver: ACK sent for chunk " << chunk_idx << " (msg_id="
-                << static_cast<int>(ack.msg_id) << ")";
-            co_return;
-          }();
-          ack_task.detach();
-        }
       }
     }
 
