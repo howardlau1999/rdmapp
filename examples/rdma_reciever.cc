@@ -451,7 +451,7 @@ void RDMAReceiver::frontend_poller() {
 
   try {
     bool stop = stop_thread_.load(std::memory_order_acquire);
-    size_t total = total_packets_;
+    size_t total = total_packets;
     size_t bmp_size = packet_bitmap_.size();
     size_t chunk_size = config_.chunk_size;
 
@@ -474,80 +474,68 @@ void RDMAReceiver::frontend_poller() {
       continue;
     }
 
-    // Poll the packet bitmap and update chunk bitmap
-    // Check each packet bitmap entry
-    for (size_t i = 0; i < packet_bitmap_.size(); ++i) {
-      // Read the packet bitmap entry atomically
-      uint16_t packet_mask = packet_bitmap_[i].load(std::memory_order_acquire);
+    // Walk chunks directly: chunk_idx is the "block" index.
+    // Chunk size is config_.chunk_size packets.
+    for (size_t chunk_idx = 0; chunk_idx < total_chunks_; ++chunk_idx) {
+      uint64_t chunk_bit = 1ULL << chunk_idx;
+      uint64_t current_chunk_bitmap =
+          chunk_bitmap_.load(std::memory_order_acquire);
 
-      // Check if the mask (0xFFFF & packet_bitmap_[i]) indicates all bits are
-      // set This means all 16 packets in this bitmap entry are received
-      if ((packet_mask & 0xFFFF) == 0xFFFF) {
-        size_t first_packet = i * 16;
-        size_t last_packet = std::min(first_packet + 15, total_packets_ - 1);
+      // Skip if we've already marked/ACKed this chunk as complete.
+      if (current_chunk_bitmap & chunk_bit) {
+        continue;
+      }
 
-        size_t first_chunk = first_packet / config_.chunk_size;
-        size_t last_chunk = last_packet / config_.chunk_size;
+      // Determine the packet index range covered by this chunk.
+      size_t chunk_start_packet = chunk_idx * config_.chunk_size;
+      size_t chunk_end_packet = std::min(
+          chunk_start_packet + config_.chunk_size - 1, total_packets_ - 1);
 
-        for (size_t chunk_idx = first_chunk;
-             chunk_idx <= last_chunk && chunk_idx < total_chunks_;
-             ++chunk_idx) {
-          uint64_t chunk_bit = 1ULL << chunk_idx;
-          uint64_t current_chunk_bitmap =
-              chunk_bitmap_.load(std::memory_order_acquire);
+      // Check if all packets in this chunk are received by consulting packet_bitmap_.
+      bool chunk_complete = true;
+      for (size_t p = chunk_start_packet; p <= chunk_end_packet; ++p) {
+        size_t bmp_idx = p / 16;
+        size_t bit_pos = p % 16;
+        uint16_t bit_mask = 1U << bit_pos;
 
-          if (current_chunk_bitmap & chunk_bit) {
-            continue;
-          }
+        if (bmp_idx >= packet_bitmap_.size()) {
+          chunk_complete = false;
+          break;
+        }
 
-          // Check if all packets in this chunk are received
-          bool chunk_complete = true;
-          size_t chunk_start_packet = chunk_idx * config_.chunk_size;
-          size_t chunk_end_packet = std::min(
-              chunk_start_packet + config_.chunk_size - 1, total_packets_ - 1);
+        uint16_t bmp_val =
+            packet_bitmap_[bmp_idx].load(std::memory_order_acquire);
 
-          for (size_t p = chunk_start_packet; p <= chunk_end_packet; ++p) {
-            size_t bmp_idx = p / 16;
-            size_t bit_pos = p % 16;
-            uint16_t bit_mask = 1U << bit_pos;
+        if ((bmp_val & bit_mask) == 0) {
+          chunk_complete = false;
+          break;
+        }
+      }
 
-            if (bmp_idx >= packet_bitmap_.size()) {
-              chunk_complete = false;
-              break;
-            }
+      if (!chunk_complete) {
+        continue;
+      }
 
-            uint16_t bmp_val =
-                packet_bitmap_[bmp_idx].load(std::memory_order_acquire);
+      // Mark this chunk as complete in the chunk bitmap.
+      chunk_bitmap_.fetch_or(chunk_bit, std::memory_order_release);
 
-            if ((bmp_val & bit_mask) == 0) {
-              chunk_complete = false;
-              break;
-            }
-          }
+      // If selective repeat is enabled, send an ACK for this chunk once.
+      if (config_.enable_selective_repeat && ctrl_qp_) {
+        if (!chunk_acked_.empty() && chunk_idx < chunk_acked_.size() &&
+            !chunk_acked_[chunk_idx]) {
+          chunk_acked_[chunk_idx] = true;
 
-          if (chunk_complete) {
-            chunk_bitmap_.fetch_or(chunk_bit, std::memory_order_release);
-
-            // If selective repeat is enabled, send an ACK for this chunk once.
-            if (config_.enable_selective_repeat && ctrl_qp_) {
-              if (!chunk_acked_.empty() && chunk_idx < chunk_acked_.size() &&
-                  !chunk_acked_[chunk_idx]) {
-                chunk_acked_[chunk_idx] = true;
-
-                auto ack_task =
-                    [this, chunk_idx]() -> rdmapp::task<void> {
-                  ChunkAck ack;
-                  ack.msg_id = current_msg_id_ - 1;
-                  ack.chunk_idx = static_cast<uint32_t>(chunk_idx);
-                  co_await ctrl_qp_->send(&ack, sizeof(ack));
-                  Logger::info() << "Receiver: ACK sent for chunk " << chunk_idx
-                                 << " (msg_id=" << static_cast<int>(ack.msg_id) << ")";
-                  co_return;
-                }();
-                ack_task.detach();
-              }
-            }
-          }
+          auto ack_task = [this, chunk_idx]() -> rdmapp::task<void> {
+            ChunkAck ack;
+            ack.msg_id = current_msg_id_ - 1;
+            ack.chunk_idx = static_cast<uint32_t>(chunk_idx);
+            co_await ctrl_qp_->send(&ack, sizeof(ack));
+            Logger::info() << "Receiver: ACK sent for chunk " << chunk_idx
+                           << " (msg_id=" << static_cast<int>(ack.msg_id)
+                           << ")";
+            co_return;
+          }();
+          ack_task.detach();
         }
       }
     }
