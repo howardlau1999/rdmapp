@@ -134,6 +134,22 @@ bool Config::load_from_file(const std::string &filepath) {
               << std::endl;
   }
 
+  // Validate that buffer_size is evenly divisible by (mtu * chunk_size).
+  // This ensures that all chunks are "full" in terms of packets and that
+  // our bitmap/chunk accounting can rely on complete chunks.
+  if (mtu == 0 || chunk_size == 0) {
+    throw std::runtime_error(
+        "[Config] Invalid configuration: mtu and chunk_size must be non-zero");
+  }
+  const std::size_t packets_per_chunk = mtu * chunk_size;
+  if (buffer_size % packets_per_chunk != 0) {
+    std::ostringstream oss;
+    oss << "[Config] Invalid configuration: buffer_size (" << buffer_size
+        << ") must be evenly divisible by (mtu * chunk_size) = "
+        << mtu << " * " << chunk_size << " = " << packets_per_chunk;
+    throw std::runtime_error(oss.str());
+  }
+
   return true;
 }
 
