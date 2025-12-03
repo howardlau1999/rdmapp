@@ -144,15 +144,6 @@ rdmapp::task<void> RDMAReceiver::receive_data(size_t expected_size) {
     completion_cv_.wait(lock, [this] { return reception_complete_.load(); });
   }
 
-  // In selective-repeat mode, wait until we've sent ACKs for all chunks before
-  // tearing down threads and QPs. This ensures the sender can receive all
-  // ACKs before either side exits.
-  if (config_.enable_selective_repeat) {
-    while (acks_sent_chunks_.load(std::memory_order_acquire) < total_chunks_) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-  }
-
   stop_thread_ = true;
   if (completion_thread_.joinable()) {
     completion_thread_.join();
@@ -451,7 +442,6 @@ void RDMAReceiver::process_completions() {
                 try {
                   auto &fut = ack_task.get_future();
                   fut.get(); // block until ACK send completes
-                  acks_sent_chunks_.fetch_add(1, std::memory_order_release);
                 } catch (const std::exception &e) {
                   Logger::error()
                       << "Receiver: Error waiting for ACK send completion for "

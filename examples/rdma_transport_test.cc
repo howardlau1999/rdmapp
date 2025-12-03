@@ -160,7 +160,7 @@ int main(int argc, char *argv[]) {
       auto data_acceptor = std::make_shared<rdmapp::acceptor>(
           loop, port, pd, recv_cq, send_cq, nullptr, config.transport_type);
       auto ctrl_acceptor = std::make_shared<rdmapp::acceptor>(
-          loop, ctrl_port, pd, recv_cq, send_cq, nullptr, IBV_QPT_RC);
+          loop, ctrl_port, pd, recv_cq, send_cq, nullptr, config.transport_type);
 
       rdmapp::task<void> receiver_task =
           [data_acceptor, ctrl_acceptor, recv_cq, buffer_size,
@@ -225,7 +225,7 @@ int main(int argc, char *argv[]) {
           config.transport_type);
       auto ctrl_connector = std::make_shared<rdmapp::connector>(
           loop, receiver_ip, ctrl_port, pd, recv_cq, send_cq, nullptr,
-          IBV_QPT_RC);
+          config.transport_type);
 
       rdmapp::task<void> sender_task =
           [data_connector, ctrl_connector, buffer_size,
