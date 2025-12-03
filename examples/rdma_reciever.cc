@@ -326,16 +326,16 @@ void RDMAReceiver::process_completions() {
         continue;
       }
 
-      // Always repost receives - the completion consumes the receive work
-      // request Even if it's a duplicate packet, we need to repost to keep the
-      // receive queue full receives_to_repost++;
-
       // Check completion status
       if (wc.status != IBV_WC_SUCCESS) {
         Logger::error() << "Receiver: Completion error: status=" << wc.status
                         << ", opcode=" << wc.opcode;
         continue;
       }
+
+      // Every completion consumes a posted receive, even duplicates.
+      // Track how many we need to repost for this batch.
+      receives_to_repost++;
 
       // Check if this completion has an immediate value
       if (wc.wc_flags & IBV_WC_WITH_IMM) {
@@ -386,7 +386,6 @@ void RDMAReceiver::process_completions() {
 
         if ((old_val & bit_mask) == 0) {
           packets_received_.fetch_add(1, std::memory_order_relaxed);
-          receives_to_repost++; // Only repost for new packets, not duplicates
           Logger::debug() << "[BACKEND] Marked packet " << packet_idx
                           << " in bitmap[" << bitmap_idx << "] (bitmask=0x"
                           << std::hex << bit_mask << ", old=0x" << old_val
