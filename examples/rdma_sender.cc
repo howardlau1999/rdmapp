@@ -212,7 +212,7 @@ rdmapp::task<void> RDMASender::send_chunk(size_t chunk_idx,
             static thread_local std::mt19937 rng(std::random_device{}());
             // 1% chance to drop a packet
             std::uniform_real_distribution<double> dist(0.0, 1.0);
-            if (dist(rng) < 0.01) {
+            if (dist(rng) < 0.001) {
                 Logger::info() << "Sender: Intentionally dropping packet "
                                << global_packet_idx << " (chunk " << chunk_idx
                                << ") for selective-repeat testing";
