@@ -133,14 +133,7 @@ rdmapp::task<void> RDMAReceiver::receive_data(size_t expected_size) {
 
   {
     std::unique_lock<std::mutex> lock(completion_mutex_);
-    auto timeout = std::chrono::seconds(config_.receiver_timeout_seconds);
-    bool success = completion_cv_.wait_for(
-        lock, timeout, [this] { return reception_complete_.load(); });
-
-    if (!success) {
-      Logger::info() << "Receiver: Timeout waiting for packets (timeout: "
-                     << config_.receiver_timeout_seconds << " seconds)";
-    }
+    completion_cv_.wait(lock, [this] { return reception_complete_.load(); });
   }
 
   stop_thread_ = true;
