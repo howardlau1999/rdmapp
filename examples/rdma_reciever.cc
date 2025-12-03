@@ -418,12 +418,10 @@ void RDMAReceiver::process_completions() {
 
               // Also send an ACK for this chunk directly from the backend
               // thread when selective repeat is enabled. Use chunk_acked_ to
-              // avoid duplicate ACKs.
+              // avoid duplicate ACKs and track how many chunks we've ACKed.
               if (config_.enable_selective_repeat && ctrl_qp_ &&
                   chunk_idx < chunk_acked_.size() &&
                   !chunk_acked_[chunk_idx]) {
-                chunk_acked_[chunk_idx] = true;
-
                 // Send ACK synchronously from this backend thread: create a
                 // coroutine task, obtain its future, and block until it
                 // completes. Control QP is RC, so this is reliable.
@@ -436,6 +434,8 @@ void RDMAReceiver::process_completions() {
                   Logger::info()
                       << "Receiver: ACK sent for chunk " << chunk_idx
                       << " (msg_id=" << static_cast<int>(ack.msg_id) << ")";
+                  chunk_acked_[chunk_idx] = true;
+                  chunks_acked_.fetch_add(1, std::memory_order_release);
                   co_return;
                 }();
 
@@ -476,13 +476,20 @@ void RDMAReceiver::process_completions() {
 
     size_t received_count = packets_received_.load(std::memory_order_acquire);
     if (received_count >= total_packets_) {
-      Logger::info() << "Receiver: All " << total_packets_
-                     << " packets received! (" << received_count << " unique, "
-                     << total_with_imm << " total with dupes)";
-      std::lock_guard<std::mutex> lock(completion_mutex_);
-      reception_complete_ = true;
-      completion_cv_.notify_all();
-      break;
+      // In selective-repeat mode, don't declare completion until all chunks
+      // have been ACKed (or at least we've run the ACK coroutine for them).
+      if (!config_.enable_selective_repeat ||
+          chunks_acked_.load(std::memory_order_acquire) >= total_chunks_) {
+        Logger::info()
+            << "Receiver: All " << total_packets_ << " packets received! ("
+            << received_count << " unique, " << total_with_imm
+            << " total with dupes) and " << chunks_acked_.load() << "/"
+            << total_chunks_ << " chunks ACKed";
+        std::lock_guard<std::mutex> lock(completion_mutex_);
+        reception_complete_ = true;
+        completion_cv_.notify_all();
+        break;
+      }
     }
   }
 
