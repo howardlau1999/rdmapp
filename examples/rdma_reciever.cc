@@ -415,39 +415,6 @@ void RDMAReceiver::process_completions() {
                 Logger::debug() << "[BACKEND] Marked chunk " << chunk_idx
                                 << " complete in chunk_bitmap_";
               }
-
-              // Also send an ACK for this chunk directly from the backend
-              // thread when selective repeat is enabled. Use chunk_acked_ to
-              // avoid duplicate ACKs and track how many chunks we've ACKed.
-              if (config_.enable_selective_repeat && ctrl_qp_ &&
-                  chunk_idx < chunk_acked_.size() &&
-                  !chunk_acked_[chunk_idx]) {
-                // Send ACK synchronously from this backend thread: create a
-                // coroutine task, obtain its future, and block until it
-                // completes. Control QP is RC, so this is reliable.
-                rdmapp::task<void> ack_task =
-                    [this, chunk_idx]() -> rdmapp::task<void> {
-                  ChunkAck ack;
-                  ack.msg_id = current_msg_id_ - 1;
-                  ack.chunk_idx = static_cast<uint32_t>(chunk_idx);
-                  co_await ctrl_qp_->send(&ack, sizeof(ack));
-                  Logger::info()
-                      << "Receiver: ACK sent for chunk " << chunk_idx
-                      << " (msg_id=" << static_cast<int>(ack.msg_id) << ")";
-                  chunk_acked_[chunk_idx] = true;
-                  chunks_acked_.fetch_add(1, std::memory_order_release);
-                  co_return;
-                }();
-
-                try {
-                  auto &fut = ack_task.get_future();
-                  fut.get(); // block until ACK send completes
-                } catch (const std::exception &e) {
-                  Logger::error()
-                      << "Receiver: Error waiting for ACK send completion for "
-                      << "chunk " << chunk_idx << ": " << e.what();
-                }
-              }
             }
           }
         } else {
@@ -540,8 +507,9 @@ void RDMAReceiver::frontend_poller() {
       continue;
     }
 
-    // New design: backend marks chunk completion in chunk_bitmap_.
-    // Frontend simply scans for newly completed chunks and sends ACKs once.
+    // Backend marks chunk completion in chunk_bitmap_.
+    // Frontend scans for newly completed chunks and sends ACKs (possibly
+    // re-sending if an ACK was lost on UC).
     uint64_t current_chunk_bitmap =
         chunk_bitmap_.load(std::memory_order_acquire);
 
@@ -551,11 +519,25 @@ void RDMAReceiver::frontend_poller() {
 
       uint64_t chunk_bit = 1ULL << chunk_idx;
       if ((current_chunk_bitmap & chunk_bit) && !chunk_acked_[chunk_idx]) {
-        // We just observed this chunk as complete and not yet ACKed.
-        // ACKs are now sent from the backend completion thread to avoid races
-        // and ensure timely delivery; the frontend only tracks which chunks
-        // have been seen as complete.
-        chunk_acked_[chunk_idx] = true;
+        // Chunk is complete but not yet ACKed. Send (or re-send) ACK from the
+        // frontend thread using the same coroutine-based send logic.
+        if (config_.enable_selective_repeat && ctrl_qp_) {
+          auto ack_task = [this, chunk_idx]() -> rdmapp::task<void> {
+            ChunkAck ack;
+            ack.msg_id = current_msg_id_ - 1;
+            ack.chunk_idx = static_cast<uint32_t>(chunk_idx);
+            co_await ctrl_qp_->send(&ack, sizeof(ack));
+            Logger::info()
+                << "Receiver: ACK sent (frontend) for chunk " << chunk_idx
+                << " (msg_id=" << static_cast<int>(ack.msg_id) << ")";
+            chunk_acked_[chunk_idx] = true;
+            chunks_acked_.fetch_add(1, std::memory_order_release);
+            co_return;
+          }();
+          // We can detach here; completion is tracked via chunk_acked_ and
+          // chunks_acked_ which are only used for completion and retries.
+          ack_task.detach();
+        }
       }
     }
 
