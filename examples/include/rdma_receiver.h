@@ -17,7 +17,9 @@ namespace RDMA_EC {
 
 class RDMAReceiver {
 public:
-  RDMAReceiver(std::shared_ptr<rdmapp::acceptor> acceptor,
+  // data_acceptor is typically UC; ctrl_acceptor can be RC for ACKs.
+  RDMAReceiver(std::shared_ptr<rdmapp::acceptor> data_acceptor,
+               std::shared_ptr<rdmapp::acceptor> ctrl_acceptor,
                std::shared_ptr<rdmapp::cq> recv_cq,
                const Config &config = Config{});
   ~RDMAReceiver();
@@ -51,7 +53,9 @@ private:
   // Send ACKs for completed chunks over the control QP (selective repeat).
   rdmapp::task<void> send_acks();
 
-  std::shared_ptr<rdmapp::acceptor> acceptor_;
+  // Separate acceptors for data (UC) and control (RC) paths.
+  std::shared_ptr<rdmapp::acceptor> data_acceptor_;
+  std::shared_ptr<rdmapp::acceptor> ctrl_acceptor_;
   std::shared_ptr<rdmapp::qp> qp_;
   std::shared_ptr<rdmapp::qp> ctrl_qp_;  // optional control QP for ACKs
   std::shared_ptr<rdmapp::cq> recv_cq_;

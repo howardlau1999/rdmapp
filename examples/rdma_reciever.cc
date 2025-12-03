@@ -12,10 +12,14 @@
 
 namespace RDMA_EC {
 
-RDMAReceiver::RDMAReceiver(std::shared_ptr<rdmapp::acceptor> acceptor,
+RDMAReceiver::RDMAReceiver(std::shared_ptr<rdmapp::acceptor> data_acceptor,
+                           std::shared_ptr<rdmapp::acceptor> ctrl_acceptor,
                            std::shared_ptr<rdmapp::cq> recv_cq,
                            const Config &config)
-    : acceptor_(acceptor), recv_cq_(recv_cq), config_(config) {
+    : data_acceptor_(data_acceptor),
+      ctrl_acceptor_(ctrl_acceptor),
+      recv_cq_(recv_cq),
+      config_(config) {
   Logger::set_enabled(config_.enable_logging);
   Logger::info() << "Receiver: Initialized with MTU=" << config_.mtu
                  << ", chunk_size=" << config_.chunk_size;
@@ -42,13 +46,17 @@ rdmapp::task<void> RDMAReceiver::receive_data(size_t expected_size) {
   expected_size_ = expected_size;
 
   Logger::info() << "Receiver: Waiting for connection...";
-  qp_ = co_await acceptor_->accept();
+  qp_ = co_await data_acceptor_->accept();
   Logger::info() << "Receiver: Connection accepted (data QP)";
 
   // If selective repeat is enabled, accept a second QP for control/ACKs.
   if (config_.enable_selective_repeat) {
-    Logger::info() << "Receiver: Waiting for control QP connection...";
-    ctrl_qp_ = co_await acceptor_->accept();
+    if (!ctrl_acceptor_) {
+      throw std::runtime_error(
+          "Receiver: enable_selective_repeat is true but ctrl_acceptor_ is null");
+    }
+    Logger::info() << "Receiver: Waiting for control QP (RC) connection...";
+    ctrl_qp_ = co_await ctrl_acceptor_->accept();
     Logger::info() << "Receiver: Control QP connection accepted";
   }
 

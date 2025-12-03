@@ -9,9 +9,12 @@
 
 namespace RDMA_EC {
 
-RDMASender::RDMASender(std::shared_ptr<rdmapp::connector> connector, 
+RDMASender::RDMASender(std::shared_ptr<rdmapp::connector> data_connector,
+                       std::shared_ptr<rdmapp::connector> ctrl_connector,
                        const Config& config)
-    : connector_(connector), config_(config) {
+    : data_connector_(data_connector),
+      ctrl_connector_(ctrl_connector),
+      config_(config) {
     Logger::set_enabled(config_.enable_logging);
     Logger::info() << "Sender: Initialized with MTU=" << config_.mtu 
               << ", chunk_size=" << config_.chunk_size;
@@ -19,13 +22,17 @@ RDMASender::RDMASender(std::shared_ptr<rdmapp::connector> connector,
 
 rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
     Logger::info() << "Sender: Connecting...";
-    qp_ = co_await connector_->connect();
+    qp_ = co_await data_connector_->connect();
     Logger::info() << "Sender: Connected (data QP)";
 
     // If selective repeat is enabled, create a separate control QP for ACKs.
     if (config_.enable_selective_repeat) {
-        Logger::info() << "Sender: Connecting control QP for selective repeat...";
-        ctrl_qp_ = co_await connector_->connect();
+        if (!ctrl_connector_) {
+            throw std::runtime_error(
+                "Sender: enable_selective_repeat is true but ctrl_connector_ is null");
+        }
+        Logger::info() << "Sender: Connecting control QP (RC) for selective repeat...";
+        ctrl_qp_ = co_await ctrl_connector_->connect();
         Logger::info() << "Sender: Control QP connected";
     }
     

@@ -15,7 +15,9 @@ namespace RDMA_EC {
 
 class RDMASender {
 public:
-    RDMASender(std::shared_ptr<rdmapp::connector> connector, 
+    // Data connector is typically UC, control connector can be RC for ACKs.
+    RDMASender(std::shared_ptr<rdmapp::connector> data_connector,
+               std::shared_ptr<rdmapp::connector> ctrl_connector,
                const Config& config = Config{});
     
     // Send data to connected receiver
@@ -44,7 +46,9 @@ private:
     // Receive ACKs on the control QP (selective repeat).
     rdmapp::task<void> receive_acks(size_t num_chunks);
     
-    std::shared_ptr<rdmapp::connector> connector_;
+    // Separate connectors for data (UC) and control (RC) paths.
+    std::shared_ptr<rdmapp::connector> data_connector_;
+    std::shared_ptr<rdmapp::connector> ctrl_connector_;
     std::shared_ptr<rdmapp::qp> qp_;
     Config config_;
     

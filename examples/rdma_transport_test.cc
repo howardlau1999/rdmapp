@@ -142,7 +142,9 @@ int main(int argc, char *argv[]) {
       // Server mode: [port] [config_file] - acts as receiver (listens for
       // connections)
       int port = std::stoi(argv[1]);
-      Logger::info() << "Starting as RECEIVER on port " << port;
+      int ctrl_port = port + 1;
+      Logger::info() << "Starting as RECEIVER on data port " << port
+                     << " and control port " << ctrl_port;
 
       config.buffer_size = buffer_size * 2;
 
@@ -155,12 +157,15 @@ int main(int argc, char *argv[]) {
       // send completions (CTS message)
       send_cq_poller = std::make_shared<rdmapp::cq_poller>(send_cq);
 
-      auto acceptor = std::make_shared<rdmapp::acceptor>(
+      auto data_acceptor = std::make_shared<rdmapp::acceptor>(
           loop, port, pd, recv_cq, send_cq, nullptr, config.transport_type);
+      auto ctrl_acceptor = std::make_shared<rdmapp::acceptor>(
+          loop, ctrl_port, pd, recv_cq, send_cq, nullptr, IBV_QPT_RC);
 
-      rdmapp::task<void> receiver_task = [acceptor, recv_cq, buffer_size,
-                                          config]() -> rdmapp::task<void> {
-        RDMAReceiver receiver(acceptor, recv_cq, config);
+      rdmapp::task<void> receiver_task =
+          [data_acceptor, ctrl_acceptor, recv_cq, buffer_size,
+           config]() -> rdmapp::task<void> {
+        RDMAReceiver receiver(data_acceptor, ctrl_acceptor, recv_cq, config);
 
         Logger::info() << "\n=== RECEIVER STARTING ===" << std::endl;
         Logger::info() << "Expecting " << buffer_size << " bytes";
@@ -203,8 +208,9 @@ int main(int argc, char *argv[]) {
       std::string receiver_ip = argv[1];
       int port_idx = 2;
       int port = std::stoi(argv[port_idx]);
+      int ctrl_port = port + 1;
       Logger::info() << "Starting as SENDER connecting to " << receiver_ip
-                     << ":" << port;
+                     << " data:" << port << " ctrl:" << ctrl_port;
 
       config.buffer_size = buffer_size * 2;
 
@@ -214,13 +220,17 @@ int main(int argc, char *argv[]) {
       send_cq_poller = std::make_shared<rdmapp::cq_poller>(send_cq);
       recv_cq_poller = std::make_shared<rdmapp::cq_poller>(recv_cq);
 
-      auto connector = std::make_shared<rdmapp::connector>(
+      auto data_connector = std::make_shared<rdmapp::connector>(
           loop, receiver_ip, port, pd, recv_cq, send_cq, nullptr,
           config.transport_type);
+      auto ctrl_connector = std::make_shared<rdmapp::connector>(
+          loop, receiver_ip, ctrl_port, pd, recv_cq, send_cq, nullptr,
+          IBV_QPT_RC);
 
-      rdmapp::task<void> sender_task = [connector, buffer_size,
-                                        config]() -> rdmapp::task<void> {
-        RDMASender sender(connector, config);
+      rdmapp::task<void> sender_task =
+          [data_connector, ctrl_connector, buffer_size,
+           config]() -> rdmapp::task<void> {
+        RDMASender sender(data_connector, ctrl_connector, config);
 
         void *large_data_buffer = allocate_test_data(buffer_size);
         if (!large_data_buffer) {
