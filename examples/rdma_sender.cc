@@ -76,10 +76,6 @@ rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
     Logger::info() << "Sender: Sending " << size << " bytes in " 
               << num_packets << " packets across " 
               << num_chunks << " chunks";
-    
-    // Measure data-path throughput on the sender:
-    // from first send until all chunks are ACKed (when SR is enabled).
-    auto data_start = std::chrono::high_resolution_clock::now();
 
     using clock = std::chrono::high_resolution_clock;
     const auto rto = std::chrono::milliseconds(config_.sr_rto_ms);
@@ -146,17 +142,6 @@ rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
 
             co_await send_chunk(chunk_idx, data_ptr, chunk_start_offset, packets_in_chunk);
         }
-    }
-
-    auto data_end = std::chrono::high_resolution_clock::now();
-    double seconds = std::chrono::duration<double>(data_end - data_start).count();
-    if (seconds > 0.0) {
-        double bytes = static_cast<double>(size);
-        double mb_per_sec = bytes / (seconds * 1024.0 * 1024.0);
-        double mbit_per_sec = (bytes * 8.0) / (seconds * 1e6);
-        std::cout << "Sender (data-path): " << mb_per_sec << " MB/s ("
-                       << mbit_per_sec << " Mbit/sec) over " << seconds
-                       << " seconds";
     }
 
     packets_sent_ += num_packets;

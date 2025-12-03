@@ -249,6 +249,13 @@ int main(int argc, char *argv[]) {
                   << sender.get_bytes_sent() << " bytes" << std::endl;
         std::cout << "Transfer time: " << duration_ms << " ms ("
                   << duration_us / 1000000.0 << " seconds)" << std::endl;
+        if (duration_us > 0) {
+          long long bytes = sender.get_bytes_sent();
+          double mbits_per_sec = (bytes * 8.0) / duration_us;
+          double mb_per_sec = (bytes * 1000.0) / duration_ms / 1024 / 1024;
+          std::cout << "Throughput: " << mb_per_sec << " MB/s ("
+                    << mbits_per_sec << " Mbit/sec)" << std::endl;
+        }
 
         free(large_data_buffer);
         co_return;

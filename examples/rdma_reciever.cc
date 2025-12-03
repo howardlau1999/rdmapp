@@ -548,6 +548,8 @@ void RDMAReceiver::frontend_poller() {
                   ack.msg_id = current_msg_id_ - 1;
                   ack.chunk_idx = static_cast<uint32_t>(chunk_idx);
                   co_await ctrl_qp_->send(&ack, sizeof(ack));
+                  Logger::info() << "Receiver: ACK sent for chunk " << chunk_idx
+                                 << " (msg_id=" << static_cast<int>(ack.msg_id) << ")";
                   co_return;
                 }();
                 ack_task.detach();
