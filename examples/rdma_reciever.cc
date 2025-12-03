@@ -144,6 +144,15 @@ rdmapp::task<void> RDMAReceiver::receive_data(size_t expected_size) {
     completion_cv_.wait(lock, [this] { return reception_complete_.load(); });
   }
 
+  // In selective-repeat mode, wait until we've sent ACKs for all chunks before
+  // tearing down threads and QPs. This ensures the sender can receive all
+  // ACKs before either side exits.
+  if (config_.enable_selective_repeat) {
+    while (acks_sent_chunks_.load(std::memory_order_acquire) < total_chunks_) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+  }
+
   stop_thread_ = true;
   if (completion_thread_.joinable()) {
     completion_thread_.join();
@@ -424,9 +433,11 @@ void RDMAReceiver::process_completions() {
                   !chunk_acked_[chunk_idx]) {
                 chunk_acked_[chunk_idx] = true;
 
-                // Fire-and-forget coroutine for ACK send; control QP is RC so
-                // ACK delivery is reliable.
-                auto ack_task = [this, chunk_idx]() -> rdmapp::task<void> {
+                // Send ACK synchronously from this backend thread: create a
+                // coroutine task, obtain its future, and block until it
+                // completes. Control QP is RC, so this is reliable.
+                rdmapp::task<void> ack_task =
+                    [this, chunk_idx]() -> rdmapp::task<void> {
                   ChunkAck ack;
                   ack.msg_id = current_msg_id_ - 1;
                   ack.chunk_idx = static_cast<uint32_t>(chunk_idx);
@@ -436,7 +447,16 @@ void RDMAReceiver::process_completions() {
                       << " (msg_id=" << static_cast<int>(ack.msg_id) << ")";
                   co_return;
                 }();
-                ack_task.detach();
+
+                try {
+                  auto &fut = ack_task.get_future();
+                  fut.get(); // block until ACK send completes
+                  acks_sent_chunks_.fetch_add(1, std::memory_order_release);
+                } catch (const std::exception &e) {
+                  Logger::error()
+                      << "Receiver: Error waiting for ACK send completion for "
+                      << "chunk " << chunk_idx << ": " << e.what();
+                }
               }
             }
           }

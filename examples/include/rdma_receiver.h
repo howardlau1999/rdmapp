@@ -79,6 +79,9 @@ private:
   // Track which chunks we've already ACKed (to avoid duplicates)
   std::vector<bool> chunk_acked_;
 
+  // Number of chunks for which we've successfully sent an ACK.
+  std::atomic<size_t> acks_sent_chunks_{0};
+
   // Background threads for processing
   std::thread completion_thread_;
   std::thread frontend_thread_;
