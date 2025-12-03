@@ -521,21 +521,23 @@ void RDMAReceiver::frontend_poller() {
       if (chunk_idx >= chunk_acked_.size())
         break;
 
-      // Check if chunk is complete (bit is set in chunk_bitmap_) and not yet ACKed.
+      // Check if chunk is complete (bit is set in chunk_bitmap_).
+      // Re-send ACKs periodically for all complete chunks to handle UC loss.
       size_t bitmap_idx_chunk = chunk_idx / 8;
       size_t bit_pos = chunk_idx % 8;
       uint8_t chunk_bit = 1U << bit_pos;
       
       if (bitmap_idx_chunk < chunk_bitmap_.size() &&
           (chunk_bitmap_[bitmap_idx_chunk].load(std::memory_order_acquire) &
-           chunk_bit) &&
-          !chunk_acked_[chunk_idx]) {
-        // Chunk is complete but not yet ACKed. Send (or re-send) ACK from the
-        // frontend thread using a synchronous coroutine-based send. We do NOT
-        // detach here to avoid using 'this' after RDMAReceiver is destroyed.
+           chunk_bit)) {
+        // Chunk is complete. Send (or re-send) ACK periodically. ACKs are
+        // idempotent, so re-sending is safe and necessary on UC where ACKs can
+        // be lost. Only increment chunks_acked_ counter on first send.
         if (config_.enable_selective_repeat && ctrl_qp_) {
+          bool is_first_ack = !chunk_acked_[chunk_idx];
+          
           rdmapp::task<void> ack_task =
-              [this, chunk_idx]() -> rdmapp::task<void> {
+              [this, chunk_idx, is_first_ack]() -> rdmapp::task<void> {
             ChunkAck ack;
             ack.msg_id = current_msg_id_ - 1;
             ack.chunk_idx = static_cast<uint32_t>(chunk_idx);
@@ -543,8 +545,10 @@ void RDMAReceiver::frontend_poller() {
             Logger::info()
                 << "Receiver: ACK sent (frontend) for chunk " << chunk_idx
                 << " (msg_id=" << static_cast<int>(ack.msg_id) << ")";
-            chunk_acked_[chunk_idx] = true;
-            chunks_acked_.fetch_add(1, std::memory_order_release);
+            if (is_first_ack) {
+              chunk_acked_[chunk_idx] = true;
+              chunks_acked_.fetch_add(1, std::memory_order_release);
+            }
             co_return;
           }();
 
