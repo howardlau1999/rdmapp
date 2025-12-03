@@ -4,6 +4,8 @@
 #include <cstring>
 #include <chrono>
 #include <random>
+#include <future>
+#include <thread>
 
 namespace RDMA_EC {
 
@@ -46,20 +48,27 @@ rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
     
     size_t num_chunks = calculate_num_chunks(num_packets, config_.chunk_size);
     
-    // Initialize selective repeat state if enabled
-    if (config_.enable_selective_repeat) {
-        {
-            std::lock_guard<std::mutex> lock(sr_mutex_);
-            sr_chunks_.clear();
-            sr_chunks_.resize(num_chunks);
-        }
+    // Initialize selective repeat state and start SR background thread if enabled
+    if (config_.enable_selective_repeat && ctrl_qp_) {
+        // Create retransmit queue with num_chunks size (timestamps initialized to 0)
+        retransmit_queue_ = std::make_unique<RetransmitQueue>(num_chunks);
 
-        // Start ACK receiver in the background BEFORE sending chunks so that
-        // ACKs are processed concurrently with transmission.
-        if (ctrl_qp_) {
-            auto ack_task = receive_acks(num_chunks);
-            ack_task.detach();
-        }
+        // Start background ACK receiver thread that will run concurrently with
+        // the sending loop and remove chunks from retransmit queue when ACKed.
+        ack_thread_started_ = true;
+        ack_thread_ = std::thread([this, num_chunks]() {
+            try {
+                auto task = receive_acks(num_chunks);
+                auto &fut = task.get_future();
+                // Do NOT detach the task here; we block on its future so that
+                // the coroutine frame stays alive until completion.
+                fut.get();
+            } catch (const std::exception &e) {
+                Logger::error() << "Sender: ACK thread exception: " << e.what();
+            } catch (...) {
+                Logger::error() << "Sender: ACK thread unknown exception";
+            }
+        });
     }
     
     // Note: current_msg_id_ is set from CTS message, not incremented here
@@ -68,27 +77,75 @@ rdmapp::task<void> RDMASender::send_data(const void* data, size_t size) {
               << num_packets << " packets across " 
               << num_chunks << " chunks";
     
-    // Measure pure data-path throughput on the sender:
-    // from first RDMA write until the last write completion.
+    // Measure data-path throughput on the sender:
+    // from first send until all chunks are ACKed (when SR is enabled).
     auto data_start = std::chrono::high_resolution_clock::now();
 
-    for (size_t chunk_idx = 0; chunk_idx < num_chunks; ++chunk_idx) {
-        size_t chunk_start_offset = chunk_idx * config_.chunk_size * config_.mtu;
-        size_t packets_in_chunk = std::min(config_.chunk_size,
-                                          num_packets - chunk_idx * config_.chunk_size);
-        Logger::info() << "Sender: Sending chunk " << chunk_idx << " with " << packets_in_chunk << " packets";
+    using clock = std::chrono::high_resolution_clock;
+    const auto rto = std::chrono::milliseconds(config_.sr_rto_ms);
 
-        // Record this chunk in the retransmission queue if selective repeat is enabled.
-        if (config_.enable_selective_repeat) {
-            auto now = std::chrono::high_resolution_clock::now();
-            std::lock_guard<std::mutex> lock(sr_mutex_);
-            if (chunk_idx < sr_chunks_.size()) {
-                sr_chunks_[chunk_idx].first_sent = now;
-                sr_chunks_[chunk_idx].acked = false;
-            }
+    if (config_.enable_selective_repeat && retransmit_queue_) {
+        // First pass: send all chunks once and set timestamps
+        for (size_t chunk_idx = 0; chunk_idx < num_chunks; ++chunk_idx) {
+            size_t chunk_start_offset = chunk_idx * config_.chunk_size * config_.mtu;
+            size_t packets_in_chunk = std::min(config_.chunk_size,
+                                              num_packets - chunk_idx * config_.chunk_size);
+            Logger::info() << "Sender: Sending chunk " << chunk_idx << " with " << packets_in_chunk << " packets";
+
+            // Send the chunk
+            co_await send_chunk(chunk_idx, data_ptr, chunk_start_offset, packets_in_chunk);
+
+            // Add to retransmit queue with current timestamp
+            auto now = clock::now();
+            auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
+            retransmit_queue_->add(static_cast<uint32_t>(chunk_idx), now_ms);
         }
 
-        co_await send_chunk(chunk_idx, data_ptr, chunk_start_offset, packets_in_chunk);
+        // Retransmission loop: continue until all chunks are acknowledged
+        while (retransmit_queue_->pending() > 0) {
+            auto now = clock::now();
+            auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
+
+            // Iterate through all chunks and check for retransmission
+            for (size_t chunk_idx = 0; chunk_idx < num_chunks; ++chunk_idx) {
+                if (retransmit_queue_->is_pending(static_cast<uint32_t>(chunk_idx))) {
+                    auto timestamp_ms = retransmit_queue_->get_timestamp(static_cast<uint32_t>(chunk_idx));
+                    auto elapsed = now_ms - timestamp_ms;
+
+                    if (elapsed >= rto) {
+                        Logger::info() << "Sender: Retransmitting chunk " << chunk_idx;
+
+                        size_t chunk_start_offset = chunk_idx * config_.chunk_size * config_.mtu;
+                        size_t packets_in_chunk = std::min(config_.chunk_size,
+                                                          num_packets - chunk_idx * config_.chunk_size);
+
+                        // Retransmit the chunk
+                        co_await send_chunk(chunk_idx, data_ptr, chunk_start_offset, packets_in_chunk);
+
+                        // Update timestamp for retransmission
+                        retransmit_queue_->update(static_cast<uint32_t>(chunk_idx), now_ms);
+                    }
+                }
+            }
+
+            // Small sleep to avoid busy-waiting
+            std::this_thread::sleep_for(rto / 4);
+        }
+
+        // Wait for ACK thread to finish
+        if (ack_thread_started_ && ack_thread_.joinable()) {
+            ack_thread_.join();
+        }
+    } else {
+        // Non-SR mode: just send all chunks once
+        for (size_t chunk_idx = 0; chunk_idx < num_chunks; ++chunk_idx) {
+            size_t chunk_start_offset = chunk_idx * config_.chunk_size * config_.mtu;
+            size_t packets_in_chunk = std::min(config_.chunk_size,
+                                              num_packets - chunk_idx * config_.chunk_size);
+            Logger::info() << "Sender: Sending chunk " << chunk_idx << " with " << packets_in_chunk << " packets";
+
+            co_await send_chunk(chunk_idx, data_ptr, chunk_start_offset, packets_in_chunk);
+        }
     }
 
     auto data_end = std::chrono::high_resolution_clock::now();
@@ -126,6 +183,7 @@ rdmapp::task<void> RDMASender::receive_acks(size_t num_chunks) {
     size_t acked_chunks = 0;
 
     while (acked_chunks < num_chunks) {
+        // Wait for next ACK
         ChunkAck ack{};
         auto [bytes, imm_opt] = co_await ctrl_qp_->recv(&ack, sizeof(ack));
 
@@ -134,15 +192,17 @@ rdmapp::task<void> RDMASender::receive_acks(size_t num_chunks) {
             continue;
         }
 
-        std::lock_guard<std::mutex> lock(sr_mutex_);
-        if (ack.chunk_idx < sr_chunks_.size()) {
-            if (!sr_chunks_[ack.chunk_idx].acked) {
-                sr_chunks_[ack.chunk_idx].acked = true;
+        // Remove the ACKed chunk from retransmit queue
+        if (retransmit_queue_ && ack.chunk_idx < num_chunks) {
+            if (retransmit_queue_->remove(static_cast<uint32_t>(ack.chunk_idx))) {
                 ++acked_chunks;
-                Logger::debug() << "Sender: ACK received for chunk " << ack.chunk_idx;
+                Logger::debug() << "Sender: ACK received for chunk "
+                                << ack.chunk_idx << " (" << acked_chunks
+                                << "/" << num_chunks << ")";
             }
         } else {
-            Logger::error() << "Sender: ACK for out-of-range chunk " << ack.chunk_idx;
+            Logger::error()
+                << "Sender: ACK for out-of-range chunk " << ack.chunk_idx;
         }
     }
 

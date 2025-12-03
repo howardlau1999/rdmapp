@@ -3,12 +3,12 @@
 #include "rdma_util.h"
 #include "connector.h"
 #include "rdma_sr.h"
+#include "retransmitqueue.h"
 #include <rdmapp/rdmapp.h>
 #include <memory>
 #include <vector>
 #include <mutex>
 #include <thread>
-#include <unordered_map>
 #include <chrono>
 
 namespace RDMA_EC {
@@ -65,14 +65,13 @@ private:
     // Control QP used for ACKs (created only if enable_selective_repeat is true).
     std::shared_ptr<rdmapp::qp> ctrl_qp_;
 
-    // Retransmission state per chunk: first send time and ack flag.
-    struct ChunkState {
-        std::chrono::high_resolution_clock::time_point first_sent;
-        bool acked = false;
-    };
+    // Retransmission queue for selective repeat
+    std::unique_ptr<RetransmitQueue> retransmit_queue_;
 
-    std::vector<ChunkState> sr_chunks_;
-    std::mutex sr_mutex_;
+  // Background thread for selective repeat
+  // - ack_thread_: waits for ACKs on control QP and removes chunks from retransmit queue
+  std::thread ack_thread_;
+  bool ack_thread_started_{false};
 };
 
 } // namespace RDMA_EC
