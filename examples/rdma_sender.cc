@@ -213,13 +213,12 @@ rdmapp::task<void> RDMASender::send_chunk(size_t chunk_idx,
                                      cts_info_.buffer_size - offset);
 
         // For testing selective repeat, we can intentionally drop individual
-        // packets with a small probability. This is only enabled when
-        // selective repeat is on.
-        if (config_.enable_selective_repeat) {
+        // packets with a configurable probability. This is only enabled when
+        // selective repeat is on and packet_loss_probability > 0.
+        if (config_.enable_selective_repeat && config_.packet_loss_probability > 0.0) {
             static thread_local std::mt19937 rng(std::random_device{}());
-            // 1% chance to drop a packet
             std::uniform_real_distribution<double> dist(0.0, 1.0);
-            if (dist(rng) < 0.001) {
+            if (dist(rng) < config_.packet_loss_probability) {
                 Logger::info() << "Sender: Intentionally dropping packet "
                                << global_packet_idx << " (chunk " << chunk_idx
                                << ") for selective-repeat testing";

@@ -91,6 +91,13 @@ bool Config::parse_line(const std::string &line) {
       }
     } else if (key == "sr_rto_ms") {
       sr_rto_ms = std::stoi(value);
+    } else if (key == "packet_loss_probability") {
+      packet_loss_probability = std::stod(value);
+      if (packet_loss_probability < 0.0 || packet_loss_probability > 1.0) {
+        std::cerr << "[Config] Warning: packet_loss_probability must be between 0.0 and 1.0. "
+                  << "Got " << packet_loss_probability << ", clamping to [0.0, 1.0]." << std::endl;
+        packet_loss_probability = std::max(0.0, std::min(1.0, packet_loss_probability));
+      }
     } else {
       std::cerr << "[Config] Unknown Config key: " << key << std::endl;
       return true;
@@ -171,6 +178,7 @@ bool Config::save_to_file(const std::string &filepath) const {
   file << "enable_logging=" << (enable_logging ? "true" : "false") << "\n";
   file << "enable_selective_repeat=" << (enable_selective_repeat ? "true" : "false") << "\n";
   file << "sr_rto_ms=" << sr_rto_ms << "\n";
+  file << "packet_loss_probability=" << packet_loss_probability << "\n";
 
   file.close();
 
@@ -190,6 +198,7 @@ void Config::print() const {
   std::cout << "  enable_logging = " << (enable_logging ? "true" : "false") << std::endl;
   std::cout << "  enable_selective_repeat = " << (enable_selective_repeat ? "true" : "false") << std::endl;
   std::cout << "  sr_rto_ms = " << sr_rto_ms << std::endl;
+  std::cout << "  packet_loss_probability = " << packet_loss_probability << std::endl;
 }
 
 } // namespace RDMA_EC

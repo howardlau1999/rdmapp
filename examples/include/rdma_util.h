@@ -28,6 +28,7 @@ public:
     // Optional selective repeat reliability
     bool enable_selective_repeat = false;
     int sr_rto_ms = 10;  // retransmission timeout in milliseconds
+    double packet_loss_probability = 0.0;  // probability of intentionally dropping packets (0.0-1.0) for testing
 
 
     bool load_from_file(const std::string& filepath);
