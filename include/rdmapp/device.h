@@ -4,8 +4,8 @@
 #include <iterator>
 #include <string>
 
-#include <infiniband/verbs.h>
 #include <infiniband/mlx5dv.h>
+#include <infiniband/verbs.h>
 
 #include "rdmapp/detail/noncopyable.h"
 
@@ -90,7 +90,7 @@ public:
 
   device(uint16_t device_num = 0, uint16_t port_num = 2, int gid_index = 0);
   // Previous version
-  //device(uint16_t device_num = 0, uint16_t port_num = 1);
+  // device(uint16_t device_num = 0, uint16_t port_num = 1);
   /**
    * @brief Get the device port number.
    *

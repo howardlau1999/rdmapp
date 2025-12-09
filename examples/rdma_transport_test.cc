@@ -162,9 +162,9 @@ int main(int argc, char *argv[]) {
       auto ctrl_acceptor = std::make_shared<rdmapp::acceptor>(
           loop, ctrl_port, pd, recv_cq, send_cq, nullptr, IBV_QPT_RC);
 
-      rdmapp::task<void> receiver_task =
-          [data_acceptor, ctrl_acceptor, recv_cq, buffer_size,
-           config]() -> rdmapp::task<void> {
+      rdmapp::task<void> receiver_task = [data_acceptor, ctrl_acceptor, recv_cq,
+                                          buffer_size,
+                                          config]() -> rdmapp::task<void> {
         RDMAReceiver receiver(data_acceptor, ctrl_acceptor, recv_cq, config);
 
         Logger::info() << "\n=== RECEIVER STARTING ===" << std::endl;
@@ -227,9 +227,9 @@ int main(int argc, char *argv[]) {
           loop, receiver_ip, ctrl_port, pd, recv_cq, send_cq, nullptr,
           IBV_QPT_RC);
 
-      rdmapp::task<void> sender_task =
-          [data_connector, ctrl_connector, buffer_size,
-           config]() -> rdmapp::task<void> {
+      rdmapp::task<void> sender_task = [data_connector, ctrl_connector,
+                                        buffer_size,
+                                        config]() -> rdmapp::task<void> {
         RDMASender sender(data_connector, ctrl_connector, config);
 
         void *large_data_buffer = allocate_test_data(buffer_size);

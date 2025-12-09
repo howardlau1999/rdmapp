@@ -14,5 +14,3 @@ struct ChunkAck {
 };
 
 } // namespace RDMA_EC
-
-

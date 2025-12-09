@@ -48,7 +48,8 @@ acceptor::acceptor(std::shared_ptr<socket::event_loop> loop,
                    std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq,
                    enum ibv_qp_type qp_type)
     : listener_(std::make_unique<socket::tcp_listener>(loop, hostname, port)),
-      pd_(pd), recv_cq_(recv_cq), send_cq_(send_cq), srq_(srq), qp_type_(qp_type) {}
+      pd_(pd), recv_cq_(recv_cq), send_cq_(send_cq), srq_(srq),
+      qp_type_(qp_type) {}
 
 task<std::shared_ptr<qp>> acceptor::accept() {
   auto channel = co_await listener_->accept();

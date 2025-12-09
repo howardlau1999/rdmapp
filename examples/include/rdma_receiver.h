@@ -1,15 +1,15 @@
 #pragma once
 
 #include "acceptor.h"
-#include "rdma_util.h"
 #include "rdma_sr.h"
+#include "rdma_util.h"
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <thread>
 #include <vector>
-#include <chrono>
 
 #include <rdmapp/rdmapp.h>
 
@@ -57,7 +57,7 @@ private:
   std::shared_ptr<rdmapp::acceptor> data_acceptor_;
   std::shared_ptr<rdmapp::acceptor> ctrl_acceptor_;
   std::shared_ptr<rdmapp::qp> qp_;
-  std::shared_ptr<rdmapp::qp> ctrl_qp_;  // optional control QP for ACKs
+  std::shared_ptr<rdmapp::qp> ctrl_qp_; // optional control QP for ACKs
   std::shared_ptr<rdmapp::cq> recv_cq_;
   Config config_;
 
@@ -71,7 +71,8 @@ private:
   // Packet tracking bitmaps
   std::vector<std::atomic<uint16_t>>
       packet_bitmap_; // templating stuff here maybe
-  // Chunk completion bitmap: one bit per chunk, packed into uint8_t (8 chunks per byte)
+  // Chunk completion bitmap: one bit per chunk, packed into uint8_t (8 chunks
+  // per byte)
   std::vector<std::atomic<uint8_t>> chunk_bitmap_;
   size_t total_packets_{0};
   size_t total_chunks_{0};

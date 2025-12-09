@@ -40,9 +40,8 @@ bool Config::parse_line(const std::string &line) {
   std::string value = trim(trimmed.substr(eq_pos + 1));
 
   // Strip quotes from value if present
-  if (value.size() >= 2 && 
-      ((value.front() == '"' && value.back() == '"') ||
-       (value.front() == '\'' && value.back() == '\''))) {
+  if (value.size() >= 2 && ((value.front() == '"' && value.back() == '"') ||
+                            (value.front() == '\'' && value.back() == '\''))) {
     value = value.substr(1, value.size() - 2);
   }
 
@@ -70,7 +69,7 @@ bool Config::parse_line(const std::string &line) {
       } else if (value == "uc") {
         transport_type = IBV_QPT_UC;
       } else {
-        std::cerr << "[Config] Warning: Unknown transport_type value: " << value 
+        std::cerr << "[Config] Warning: Unknown transport_type value: " << value
                   << " (expected 'rc' or 'uc'). Using default." << std::endl;
       }
     } else if (key == "enable_logging") {
@@ -94,9 +93,12 @@ bool Config::parse_line(const std::string &line) {
     } else if (key == "packet_loss_probability") {
       packet_loss_probability = std::stod(value);
       if (packet_loss_probability < 0.0 || packet_loss_probability > 1.0) {
-        std::cerr << "[Config] Warning: packet_loss_probability must be between 0.0 and 1.0. "
-                  << "Got " << packet_loss_probability << ", clamping to [0.0, 1.0]." << std::endl;
-        packet_loss_probability = std::max(0.0, std::min(1.0, packet_loss_probability));
+        std::cerr << "[Config] Warning: packet_loss_probability must be "
+                     "between 0.0 and 1.0. "
+                  << "Got " << packet_loss_probability
+                  << ", clamping to [0.0, 1.0]." << std::endl;
+        packet_loss_probability =
+            std::max(0.0, std::min(1.0, packet_loss_probability));
       }
     } else {
       std::cerr << "[Config] Unknown Config key: " << key << std::endl;
@@ -134,7 +136,8 @@ bool Config::load_from_file(const std::string &filepath) {
 
   file.close();
 
-  // Config loading messages use std::cout directly (before logger is initialized)
+  // Config loading messages use std::cout directly (before logger is
+  // initialized)
   std::cout << "[Config] Loaded configuration from " << filepath << std::endl;
   if (has_errors) {
     std::cerr << "[Config] Some errors occurred while parsing config file"
@@ -152,8 +155,8 @@ bool Config::load_from_file(const std::string &filepath) {
   if (buffer_size % packets_per_chunk != 0) {
     std::ostringstream oss;
     oss << "[Config] Invalid configuration: buffer_size (" << buffer_size
-        << ") must be evenly divisible by (mtu * chunk_size) = "
-        << mtu << " * " << chunk_size << " = " << packets_per_chunk;
+        << ") must be evenly divisible by (mtu * chunk_size) = " << mtu << " * "
+        << chunk_size << " = " << packets_per_chunk;
     throw std::runtime_error(oss.str());
   }
 
@@ -176,7 +179,8 @@ bool Config::save_to_file(const std::string &filepath) const {
   file << "cpu_core_id=" << cpu_core_id << "\n";
   file << "receiver_timeout_seconds=" << receiver_timeout_seconds << "\n";
   file << "enable_logging=" << (enable_logging ? "true" : "false") << "\n";
-  file << "enable_selective_repeat=" << (enable_selective_repeat ? "true" : "false") << "\n";
+  file << "enable_selective_repeat="
+       << (enable_selective_repeat ? "true" : "false") << "\n";
   file << "sr_rto_ms=" << sr_rto_ms << "\n";
   file << "packet_loss_probability=" << packet_loss_probability << "\n";
 
@@ -195,10 +199,13 @@ void Config::print() const {
   std::cout << "  cpu_core_id = " << cpu_core_id << std::endl;
   std::cout << "  receiver_timeout_seconds = " << receiver_timeout_seconds
             << std::endl;
-  std::cout << "  enable_logging = " << (enable_logging ? "true" : "false") << std::endl;
-  std::cout << "  enable_selective_repeat = " << (enable_selective_repeat ? "true" : "false") << std::endl;
+  std::cout << "  enable_logging = " << (enable_logging ? "true" : "false")
+            << std::endl;
+  std::cout << "  enable_selective_repeat = "
+            << (enable_selective_repeat ? "true" : "false") << std::endl;
   std::cout << "  sr_rto_ms = " << sr_rto_ms << std::endl;
-  std::cout << "  packet_loss_probability = " << packet_loss_probability << std::endl;
+  std::cout << "  packet_loss_probability = " << packet_loss_probability
+            << std::endl;
 }
 
 } // namespace RDMA_EC

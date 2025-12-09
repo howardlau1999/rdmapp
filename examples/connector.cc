@@ -50,8 +50,8 @@ connector::connector(std::shared_ptr<socket::event_loop> loop,
 task<std::shared_ptr<qp>> connector::connect() {
   auto connection =
       co_await rdmapp::socket::tcp_connection::connect(loop_, hostname_, port_);
-  auto qp =
-      co_await from_tcp_connection(*connection, pd_, recv_cq_, send_cq_, srq_, qp_type_);
+  auto qp = co_await from_tcp_connection(*connection, pd_, recv_cq_, send_cq_,
+                                         srq_, qp_type_);
   co_return qp;
 }
 

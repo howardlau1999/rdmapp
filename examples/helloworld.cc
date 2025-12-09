@@ -108,10 +108,11 @@ rdmapp::task<void> client(rdmapp::connector &connector) {
 
 int main(int argc, char *argv[]) {
   auto device = std::make_shared<rdmapp::device>(0, 1, 3);
-  auto pd = std::make_shared<rdmapp::pd>(device); //memory protection domain
-  auto cq = std::make_shared<rdmapp::cq>(device); //completion queue
-  auto cq_poller = std::make_shared<rdmapp::cq_poller>(cq); //completion queue poller
-  auto loop = rdmapp::socket::event_loop::new_loop(); //async event loop
+  auto pd = std::make_shared<rdmapp::pd>(device); // memory protection domain
+  auto cq = std::make_shared<rdmapp::cq>(device); // completion queue
+  auto cq_poller =
+      std::make_shared<rdmapp::cq_poller>(cq);        // completion queue poller
+  auto loop = rdmapp::socket::event_loop::new_loop(); // async event loop
   auto looper = std::thread([loop]() { loop->loop(); });
   if (argc == 2) {
     rdmapp::acceptor acceptor(loop, std::stoi(argv[1]), pd, cq);

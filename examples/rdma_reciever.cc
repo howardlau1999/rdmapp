@@ -16,10 +16,8 @@ RDMAReceiver::RDMAReceiver(std::shared_ptr<rdmapp::acceptor> data_acceptor,
                            std::shared_ptr<rdmapp::acceptor> ctrl_acceptor,
                            std::shared_ptr<rdmapp::cq> recv_cq,
                            const Config &config)
-    : data_acceptor_(data_acceptor),
-      ctrl_acceptor_(ctrl_acceptor),
-      recv_cq_(recv_cq),
-      config_(config) {
+    : data_acceptor_(data_acceptor), ctrl_acceptor_(ctrl_acceptor),
+      recv_cq_(recv_cq), config_(config) {
   Logger::set_enabled(config_.enable_logging);
   Logger::info() << "Receiver: Initialized with MTU=" << config_.mtu
                  << ", chunk_size=" << config_.chunk_size;
@@ -52,8 +50,8 @@ rdmapp::task<void> RDMAReceiver::receive_data(size_t expected_size) {
   // If selective repeat is enabled, accept a second QP for control/ACKs.
   if (config_.enable_selective_repeat) {
     if (!ctrl_acceptor_) {
-      throw std::runtime_error(
-          "Receiver: enable_selective_repeat is true but ctrl_acceptor_ is null");
+      throw std::runtime_error("Receiver: enable_selective_repeat is true but "
+                               "ctrl_acceptor_ is null");
     }
     Logger::info() << "Receiver: Waiting for control QP (RC) connection...";
     ctrl_qp_ = co_await ctrl_acceptor_->accept();
@@ -96,7 +94,8 @@ rdmapp::task<void> RDMAReceiver::receive_data(size_t expected_size) {
   size_t bitmap_size = (total_packets_ + 15) / 16; // Round up to nearest 16
   packet_bitmap_ = std::vector<std::atomic<uint16_t>>(bitmap_size);
 
-  // Initialize chunk bitmap: one bit per chunk, packed into uint8_t (8 chunks per byte)
+  // Initialize chunk bitmap: one bit per chunk, packed into uint8_t (8 chunks
+  // per byte)
   size_t chunk_bitmap_size = (total_chunks_ + 7) / 8; // Round up to nearest 8
   chunk_bitmap_ = std::vector<std::atomic<uint8_t>>(chunk_bitmap_size);
 
@@ -120,8 +119,7 @@ rdmapp::task<void> RDMAReceiver::receive_data(size_t expected_size) {
   Logger::info() << "Receiver: Verified dummy_recv_mr_ is set (addr=0x"
                  << std::hex
                  << reinterpret_cast<uint64_t>(oob_buffer_mr_->addr())
-                 << std::dec << ", length=" << oob_buffer_mr_->length() <<
-                 ")";
+                 << std::dec << ", length=" << oob_buffer_mr_->length() << ")";
 
   Logger::info() << "Receiver: Pre-thread checks - packet_bitmap_.size()="
                  << packet_bitmap_.size()
@@ -413,7 +411,7 @@ void RDMAReceiver::process_completions() {
               size_t bitmap_idx_chunk = chunk_idx / 8;
               size_t bit_pos = chunk_idx % 8;
               uint8_t chunk_bit = 1U << bit_pos;
-              
+
               if (bitmap_idx_chunk < chunk_bitmap_.size()) {
                 uint8_t old_val = chunk_bitmap_[bitmap_idx_chunk].fetch_or(
                     chunk_bit, std::memory_order_release);
@@ -454,11 +452,11 @@ void RDMAReceiver::process_completions() {
       // have been ACKed (or at least we've run the ACK coroutine for them).
       if (!config_.enable_selective_repeat ||
           chunks_acked_.load(std::memory_order_acquire) >= total_chunks_) {
-        Logger::info()
-            << "Receiver: All " << total_packets_ << " packets received! ("
-            << received_count << " unique, " << total_with_imm
-            << " total with dupes) and " << chunks_acked_.load() << "/"
-            << total_chunks_ << " chunks ACKed";
+        Logger::info() << "Receiver: All " << total_packets_
+                       << " packets received! (" << received_count
+                       << " unique, " << total_with_imm
+                       << " total with dupes) and " << chunks_acked_.load()
+                       << "/" << total_chunks_ << " chunks ACKed";
         std::lock_guard<std::mutex> lock(completion_mutex_);
         reception_complete_ = true;
         completion_cv_.notify_all();
@@ -526,7 +524,7 @@ void RDMAReceiver::frontend_poller() {
       size_t bitmap_idx_chunk = chunk_idx / 8;
       size_t bit_pos = chunk_idx % 8;
       uint8_t chunk_bit = 1U << bit_pos;
-      
+
       if (bitmap_idx_chunk < chunk_bitmap_.size() &&
           (chunk_bitmap_[bitmap_idx_chunk].load(std::memory_order_acquire) &
            chunk_bit)) {
@@ -535,16 +533,17 @@ void RDMAReceiver::frontend_poller() {
         // be lost. Only increment chunks_acked_ counter on first send.
         if (config_.enable_selective_repeat && ctrl_qp_) {
           bool is_first_ack = !chunk_acked_[chunk_idx];
-          
-          rdmapp::task<void> ack_task =
-              [this, chunk_idx, is_first_ack]() -> rdmapp::task<void> {
+
+          rdmapp::task<void> ack_task = [this, chunk_idx,
+                                         is_first_ack]() -> rdmapp::task<void> {
             ChunkAck ack;
             ack.msg_id = current_msg_id_ - 1;
             ack.chunk_idx = static_cast<uint32_t>(chunk_idx);
             co_await ctrl_qp_->send(&ack, sizeof(ack));
-            Logger::info()
-                << "Receiver: ACK sent (frontend) for chunk " << chunk_idx
-                << " (msg_id=" << static_cast<int>(ack.msg_id) << ")";
+            Logger::info() << "Receiver: ACK sent (frontend) for chunk "
+                           << chunk_idx
+                           << " (msg_id=" << static_cast<int>(ack.msg_id)
+                           << ")";
             if (is_first_ack) {
               chunk_acked_[chunk_idx] = true;
               chunks_acked_.fetch_add(1, std::memory_order_release);
@@ -556,9 +555,8 @@ void RDMAReceiver::frontend_poller() {
             auto &fut = ack_task.get_future();
             fut.get(); // block frontend thread until ACK send completes
           } catch (const std::exception &e) {
-            Logger::error()
-                << "Receiver: Error in frontend ACK send for chunk "
-                << chunk_idx << ": " << e.what();
+            Logger::error() << "Receiver: Error in frontend ACK send for chunk "
+                            << chunk_idx << ": " << e.what();
           }
         }
       }
@@ -574,16 +572,17 @@ void RDMAReceiver::frontend_poller() {
 }
 
 bool RDMAReceiver::is_complete() const {
-  // Check if all chunks are marked as complete in the bitmap (one bit per chunk).
+  // Check if all chunks are marked as complete in the bitmap (one bit per
+  // chunk).
   for (size_t chunk_idx = 0; chunk_idx < total_chunks_; ++chunk_idx) {
     size_t bitmap_idx_chunk = chunk_idx / 8;
     size_t bit_pos = chunk_idx % 8;
     uint8_t chunk_bit = 1U << bit_pos;
-    
+
     if (bitmap_idx_chunk >= chunk_bitmap_.size()) {
       return false;
     }
-    
+
     if ((chunk_bitmap_[bitmap_idx_chunk].load(std::memory_order_acquire) &
          chunk_bit) == 0) {
       return false;

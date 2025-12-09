@@ -20,8 +20,8 @@
 #include <utility>
 #include <vector>
 
-#include <infiniband/verbs.h>
 #include <infiniband/mlx5dv.h>
+#include <infiniband/verbs.h>
 
 #include "rdmapp/error.h"
 #include "rdmapp/executor.h"
@@ -55,7 +55,7 @@ qp::qp(std::shared_ptr<rdmapp::pd> pd, std::shared_ptr<cq> recv_cq,
        std::shared_ptr<cq> send_cq, std::shared_ptr<srq> srq)
     : qp_(nullptr), pd_(pd), recv_cq_(recv_cq), send_cq_(send_cq), srq_(srq),
       qp_type_(IBV_QPT_RC) {
-  //create_mlx5();
+  // create_mlx5();
   create();
   init();
 }
@@ -69,15 +69,15 @@ qp::qp(std::shared_ptr<rdmapp::pd> pd, std::shared_ptr<cq> recv_cq,
        std::shared_ptr<srq> srq)
     : qp_(nullptr), pd_(pd), recv_cq_(recv_cq), send_cq_(send_cq), srq_(srq),
       qp_type_(qp_type) {
-  //create_mlx5();
+  // create_mlx5();
   create(qp_type);
   init();
 }
 
 qp::qp(const uint16_t remote_lid, const uint32_t remote_qpn,
        const uint32_t remote_psn, const union ibv_gid remote_gid,
-       std::shared_ptr<pd> pd, std::shared_ptr<cq> cq,
-       enum ibv_qp_type qp_type, std::shared_ptr<srq> srq)
+       std::shared_ptr<pd> pd, std::shared_ptr<cq> cq, enum ibv_qp_type qp_type,
+       std::shared_ptr<srq> srq)
     : qp(remote_lid, remote_qpn, remote_psn, remote_gid, pd, cq, cq, qp_type,
          srq) {}
 
@@ -107,9 +107,7 @@ std::vector<uint8_t> qp::serialize() const {
   return buffer;
 }
 
-void qp::create() {
-  create(IBV_QPT_RC);
-}
+void qp::create() { create(IBV_QPT_RC); }
 
 void qp::create(enum ibv_qp_type qp_type) {
   qp_type_ = qp_type;
@@ -163,26 +161,27 @@ void qp::create_mlx5() {
   }
 
   struct ibv_qp_init_attr_ex ex = {};
-  ex.qp_type    = qp_init_attr.qp_type;
-  ex.send_cq    = qp_init_attr.send_cq;
-  ex.recv_cq    = qp_init_attr.recv_cq;
-  ex.cap        = qp_init_attr.cap;
+  ex.qp_type = qp_init_attr.qp_type;
+  ex.send_cq = qp_init_attr.send_cq;
+  ex.recv_cq = qp_init_attr.recv_cq;
+  ex.cap = qp_init_attr.cap;
   ex.sq_sig_all = qp_init_attr.sq_sig_all;
   ex.qp_context = qp_init_attr.qp_context;
-  ex.comp_mask  = IBV_QP_INIT_ATTR_PD;  
-  ex.pd         = pd_->pd_;
+  ex.comp_mask = IBV_QP_INIT_ATTR_PD;
+  ex.pd = pd_->pd_;
   if (srq_ != nullptr) {
     ex.srq = raw_srq_;
   }
   struct mlx5dv_qp_init_attr dv = {};
-  dv.comp_mask   = MLX5DV_QP_INIT_ATTR_MASK_QP_CREATE_FLAGS;
+  dv.comp_mask = MLX5DV_QP_INIT_ATTR_MASK_QP_CREATE_FLAGS;
   dv.create_flags = MLX5DV_QP_CREATE_DISABLE_SCATTER_TO_CQE;
 
-  ibv_context* ctx = pd_->pd_->context;
+  ibv_context *ctx = pd_->pd_->context;
   qp_ = mlx5dv_create_qp(ctx, &ex, &dv);
   if (!qp_) {
-    RDMAPP_LOG_TRACE("mlx5dv_create_qp failed (%s), falling back to ibv_create_qp",
-                     strerror(errno));
+    RDMAPP_LOG_TRACE(
+        "mlx5dv_create_qp failed (%s), falling back to ibv_create_qp",
+        strerror(errno));
     qp_ = ::ibv_create_qp(pd_->pd_, &qp_init_attr);
   }
 
@@ -199,7 +198,7 @@ void qp::init() {
   qp_attr.qp_state = IBV_QPS_INIT;
   qp_attr.pkey_index = 0;
   qp_attr.port_num = pd_->device_ptr()->port_num();
-  
+
   // Set access flags based on QP type
   if (qp_type_ == IBV_QPT_RC) {
     qp_attr.qp_access_flags = IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ |
@@ -208,7 +207,7 @@ void qp::init() {
     // UC QPs only support REMOTE_WRITE and LOCAL_WRITE
     qp_attr.qp_access_flags = IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_LOCAL_WRITE;
   }
-  
+
   try {
     check_rc(::ibv_modify_qp(qp_, &qp_attr,
                              IBV_QP_STATE | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS |

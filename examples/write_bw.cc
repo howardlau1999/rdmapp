@@ -4,12 +4,12 @@
 #include <cassert>
 #include <chrono>
 #include <exception>
+#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <ratio>
 #include <string>
 #include <thread>
-#include <iomanip>
 
 #include <rdmapp/rdmapp.h>
 
@@ -78,9 +78,9 @@ int main(int argc, char *argv[]) {
       std::this_thread::sleep_for(1s);
       size_t iops = gSendCount.exchange(0);
       double throughput_gbps = (static_cast<double>(iops) * 64.0) / 1e9;
-      std::cout << std::fixed << std::setprecision(6)
-                << "IOPS: " << iops 
-                << " | Throughput: " << throughput_gbps << " Gbits/s" << std::endl;
+      std::cout << std::fixed << std::setprecision(6) << "IOPS: " << iops
+                << " | Throughput: " << throughput_gbps << " Gbits/s"
+                << std::endl;
     }
   });
   if (argc == 2) {
