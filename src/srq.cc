@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <memory>
+#include <utility>
 
 #include <infiniband/verbs.h>
 
@@ -12,7 +13,8 @@
 
 namespace rdmapp {
 
-srq::srq(std::shared_ptr<pd> pd, size_t max_wr) : srq_(nullptr), pd_(pd) {
+srq::srq(std::shared_ptr<pd> pd, size_t max_wr)
+    : srq_(nullptr), pd_(std::move(pd)) {
   struct ibv_srq_init_attr srq_init_attr;
   srq_init_attr.srq_context = this;
   srq_init_attr.attr.max_sge = 1;
