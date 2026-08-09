@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstring>
 #include <memory>
+#include <utility>
 
 #include <infiniband/verbs.h>
 
@@ -13,8 +14,8 @@
 
 namespace rdmapp {
 
-pd::pd(std::shared_ptr<rdmapp::device> device) : device_(device) {
-  pd_ = ::ibv_alloc_pd(device->ctx_);
+pd::pd(std::shared_ptr<rdmapp::device> device) : device_(std::move(device)) {
+  pd_ = ::ibv_alloc_pd(device_->ctx_);
   check_ptr(pd_, "failed to alloc pd");
   RDMAPP_LOG_TRACE("alloc pd %p", reinterpret_cast<void *>(pd_));
 }
