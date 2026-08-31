@@ -255,20 +255,20 @@ qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp,
                                    std::shared_ptr<local_mr> local_mr,
                                    enum ibv_wr_opcode opcode,
                                    remote_mr const &remote_mr)
-    : qp_(std::move(qp)), local_mr_(std::move(local_mr)),
-      remote_mr_(remote_mr), opcode_(opcode) {}
+    : qp_(std::move(qp)), local_mr_(std::move(local_mr)), remote_mr_(remote_mr),
+      opcode_(opcode) {}
 qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp,
                                    std::shared_ptr<local_mr> local_mr,
                                    enum ibv_wr_opcode opcode,
                                    remote_mr const &remote_mr, uint32_t imm)
-    : qp_(std::move(qp)), local_mr_(std::move(local_mr)),
-      remote_mr_(remote_mr), imm_(imm), opcode_(opcode) {}
+    : qp_(std::move(qp)), local_mr_(std::move(local_mr)), remote_mr_(remote_mr),
+      imm_(imm), opcode_(opcode) {}
 qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp,
                                    std::shared_ptr<local_mr> local_mr,
                                    enum ibv_wr_opcode opcode,
                                    remote_mr const &remote_mr, uint64_t add)
-    : qp_(std::move(qp)), local_mr_(std::move(local_mr)),
-      remote_mr_(remote_mr), compare_add_(add), opcode_(opcode) {}
+    : qp_(std::move(qp)), local_mr_(std::move(local_mr)), remote_mr_(remote_mr),
+      compare_add_(add), opcode_(opcode) {}
 qp::send_awaitable::send_awaitable(std::shared_ptr<qp> qp,
                                    std::shared_ptr<local_mr> local_mr,
                                    enum ibv_wr_opcode opcode,
